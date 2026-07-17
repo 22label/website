@@ -1,0 +1,171 @@
+/* Bottom-right release previewer — default collapsed, expands on hover.
+   Anchored bottom-right; grows up + left. The corner never moves. */
+.release {
+  position: fixed;
+  bottom: var(--corner-gap);
+  right: var(--corner-gap);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 24px;
+  width: fit-content;
+  text-align: right;
+  z-index: var(--z-player); /* above the gradient child; below the menu */
+}
+
+/* Not shown on mobile (no bottom-right previewer in the mobile design). */
+@media (max-width: 767px) {
+  .release {
+    display: none;
+  }
+}
+
+.value {
+  color: var(--white);
+}
+
+.divider {
+  display: block;
+  width: 22px;
+  height: 1px;
+  background: var(--divider);
+}
+
+/* Right-edge protective gradient (Home desktop only). Fixed to the viewport's
+   right edge, full height, ~25.7vw (444px @1728). Invisible by default; fades
+   in with the same hover/focus state that expands the player. Sits above the
+   marquee but below the release copy (z-index -1 inside .release's z-3 context),
+   never intercepts the pointer. */
+.rightGradient {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 25.694vw;
+  height: 100vh; /* fallback */
+  height: 100dvh;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    to right,
+    rgba(20, 24, 28, 0) 0%,
+    rgba(20, 24, 28, 0) 50%,
+    #040405 100%
+  );
+  transition: opacity 0.375s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .release:hover .rightGradient,
+  .release:focus-within .rightGradient {
+    opacity: 1;
+  }
+}
+
+.releaseTop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.releaseCopy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.comingSoon {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Collapsible detail block — grid 0fr -> 1fr avoids any layout jump. */
+.releaseDetails {
+  display: grid;
+  grid-template-rows: 0fr;
+  width: 100%;
+  transition: grid-template-rows 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.releaseDetailsInner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.26s ease 0.06s,
+    transform 0.26s ease 0.06s;
+}
+
+.releaseDetailsInner .value {
+  white-space: nowrap;
+}
+
+/* Cover — 110×110 default, 220×220 on hover. */
+.coverWrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  overflow: hidden;
+  transition:
+    width 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Centred COMING SOON label over the cover — crisp, never scaled. */
+.coverLabel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.coverLabelPill {
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  padding: 10px;
+  color: var(--white);
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .release:hover .releaseDetails,
+  .release:focus-within .releaseDetails {
+    grid-template-rows: 1fr;
+  }
+  .release:hover .releaseDetailsInner,
+  .release:focus-within .releaseDetailsInner {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .release:hover .coverWrap,
+  .release:focus-within .coverWrap {
+    width: 220px;
+    height: 220px;
+  }
+  .release:hover .coverLabel,
+  .release:focus-within .coverLabel {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

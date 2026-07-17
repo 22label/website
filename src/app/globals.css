@@ -1,0 +1,115 @@
+/* ============================================================
+   2HOT2HANDLE — global styles
+   Single-viewport desktop homepage. No scrolling.
+   ============================================================ */
+
+:root {
+  --white: #ffffff;
+  --muted: #919191;
+  --divider: rgba(255, 255, 255, 0.45);
+
+  /* Exact dark gradient exported from Figma */
+  --page-gradient: linear-gradient(
+    152.689deg,
+    rgb(44, 52, 62) 17.843%,
+    rgb(0, 0, 0) 83.03%
+  );
+
+  /* Global interface typography */
+  --ui-font-size: 16px;
+  --ui-letter-spacing: 1.76px;
+
+  --corner-gap: 64px;
+
+  /* Desktop stacking hierarchy (single source of truth):
+     canvas(marquee/3D) < right-hover gradient < release player < corner menu */
+  --z-canvas: 0;
+  --z-player: 3; /* bottom-right release previewer; its gradient child sits below its copy */
+  --z-menu: 5; /* top-right menu + logo + bottom-left info, always above the gradient */
+
+  /* Shared responsive content anchor for Releases / About / A Day With.
+     Proportional to the 1728×976 reference (520/1728 = 30.0926%,
+     128/976 = 13.1148%): exactly 520/128 at reference, scales with the
+     viewport, clamped so it never collides with logo / menu / edges. */
+  --page-content-x: clamp(360px, 30.0926vw, 960px);
+  --page-content-y: clamp(96px, 13.1148dvh, 220px);
+  --page-content-max-width: calc(100vw - var(--page-content-x) - 64px);
+
+  /* Mobile background gradient angle (desktop keeps --page-gradient). */
+  --mobile-gradient: linear-gradient(
+    116.8deg,
+    rgb(44, 52, 62) 17.843%,
+    rgb(0, 0, 0) 83.03%
+  );
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  height: 100%;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100vh; /* fallback */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body {
+  color: var(--white);
+  background: var(--page-gradient) fixed;
+  font-family: var(--font-clash-display), "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--ui-font-size);
+  font-weight: 400;
+  letter-spacing: var(--ui-letter-spacing);
+  line-height: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Mobile: dedicated gradient angle + safe-area-aware viewport. */
+@media (max-width: 767px) {
+  html,
+  body {
+    height: 100svh;
+    height: 100dvh;
+  }
+  body {
+    background: var(--mobile-gradient) fixed;
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+ul {
+  list-style: none;
+}
+
+/* Accessible keyboard focus — visible ring that never shifts layout */
+a:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 4px;
+  border-radius: 1px;
+}
+
+/* Reduced motion — damp decorative transitions (the 3D glitch is disabled
+   in JS; wheel rotation stays functional). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

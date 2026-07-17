@@ -1,0 +1,95 @@
+/* Top-right navigation — auto-layout, right-aligned, width fit-content. */
+.nav {
+  position: fixed;
+  top: var(--corner-gap);
+  right: var(--corner-gap);
+  width: fit-content;
+  z-index: var(--z-menu); /* above the WebGL canvas, player + right-hover gradient */
+}
+
+/* Desktop-only — replaced by the mobile header/menu <=767px. */
+@media (max-width: 767px) {
+  .nav {
+    display: none;
+  }
+}
+
+.menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.menu li {
+  display: block;
+}
+
+/* Each item shrinks to its text so the right edge aligns and the active
+   indicator can be measured against the real text position. */
+.menu a {
+  display: inline-block;
+  color: var(--white);
+  transition: color 0.2s ease;
+}
+
+.menu a.active {
+  color: var(--muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .menu a:not(.active):hover {
+    color: var(--muted);
+  }
+}
+
+/* Route indicator — a 22px line that animates to the active item. */
+.indicator {
+  position: absolute;
+  width: 22px;
+  height: 1px;
+  background: var(--divider);
+  transform: translateY(-50%);
+  transition:
+    top 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.3s ease;
+  pointer-events: none;
+}
+
+/* Social icon row — SoundCloud, Instagram, YouTube. 16px tall, 16px gap. */
+.social {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.social a {
+  display: inline-flex;
+  align-items: center;
+  color: var(--white);
+  transition: color 0.2s ease;
+}
+
+.icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+/* SoundCloud waveform — reference box ~20×16. */
+.iconSoundcloud {
+  display: block;
+  width: 20px;
+  height: 16px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .social a:hover {
+    color: var(--muted);
+  }
+}

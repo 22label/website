@@ -1,0 +1,203 @@
+/* A Day With page content — anchored at left 520 / top 128 (desktop ref). */
+.content {
+  position: absolute;
+  left: var(--page-content-x);
+  top: var(--page-content-y);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 48px; /* title -> block */
+  max-width: var(--page-content-max-width);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 64px;
+  line-height: normal;
+  letter-spacing: normal;
+  text-transform: uppercase;
+  color: var(--white);
+  white-space: nowrap;
+  animation: titleIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* intro + cards enter together as the second step */
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  animation: blockIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+}
+
+.intro {
+  margin: 0;
+  width: 490px;
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: 2.42px;
+  line-height: normal;
+  color: var(--white);
+}
+
+.cards {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 24px;
+}
+
+/* Episode 001 card — the entire card is the link. */
+.card {
+  position: relative;
+  display: block;
+  width: 267px;
+  height: 150px;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.cardImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.playIcon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 64px;
+  height: 64px;
+  transform: translate(-50%, -50%) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 4px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: scale(1.1);
+    z-index: 2;
+  }
+  .card:hover .cardImg {
+    opacity: 0.5;
+  }
+  .card:hover .playIcon {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* Keyboard users get the same presentation */
+.card:focus-visible {
+  transform: scale(1.1);
+  z-index: 2;
+}
+.card:focus-visible .cardImg {
+  opacity: 0.5;
+}
+.card:focus-visible .playIcon {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Episode 002 placeholder */
+.placeholder {
+  width: 267px;
+  height: 150px;
+  border: 1px solid #ffffff;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.placeholderText {
+  width: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.value {
+  color: var(--white);
+}
+.muted {
+  color: var(--muted);
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 767px) {
+  .content {
+    left: 0;
+    top: calc(env(safe-area-inset-top) + 138px);
+    width: 100%;
+    max-width: none;
+    gap: 48px;
+    padding: 0 max(24px, env(safe-area-inset-left));
+  }
+  .title {
+    font-size: 32px;
+  }
+  .intro {
+    width: calc(100vw - 48px);
+    font-size: 16px;
+    letter-spacing: 0.8px;
+  }
+  /* Carousel — snap-scroll; next card peeks as in Figma. */
+  .cards {
+    width: calc(100vw - 48px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .cards::-webkit-scrollbar {
+    display: none;
+  }
+  .card,
+  .placeholder {
+    flex: 0 0 267px;
+    scroll-snap-align: start;
+  }
+  .card:active {
+    transform: scale(0.98);
+  }
+}
+
+@keyframes titleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes blockIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

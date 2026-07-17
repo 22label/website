@@ -1,0 +1,62 @@
+/* Mobile-only Home bottom information (Home route only). Stays in the DOM when
+   the menu opens — simply covered by the opaque overlay, never hidden/remounted. */
+.mobileInfo {
+  display: none;
+}
+
+/* Home mobile bottom info — node 204:8528 (Home only; NOT shared with the
+   other mobile pages or desktop). Row layout, 12px, own spacing. */
+@media (max-width: 767px) {
+  .mobileInfo {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    width: 100%;
+    min-height: 94px;
+    box-sizing: border-box;
+    z-index: var(--z-menu);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 22px;
+    padding: 24px;
+    padding-left: max(24px, env(safe-area-inset-left));
+    padding-right: max(24px, env(safe-area-inset-right));
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    width: fit-content;
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .divider {
+    display: block;
+    width: 22px;
+    height: 1px;
+    background: var(--divider);
+  }
+
+  .label,
+  .value {
+    font-size: 12px;
+    letter-spacing: 1.32px;
+    line-height: normal;
+  }
+  .label {
+    color: var(--muted);
+  }
+  .value {
+    color: var(--white);
+  }
+}

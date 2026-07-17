@@ -1,0 +1,118 @@
+/* About page content — anchored at left 520 / top 128 (desktop ref). */
+.content {
+  position: absolute;
+  left: var(--page-content-x);
+  top: var(--page-content-y);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 48px; /* title -> text */
+  width: min(448px, var(--page-content-max-width));
+}
+
+.title {
+  font-weight: 600;
+  font-size: 64px;
+  line-height: normal;
+  letter-spacing: normal;
+  text-transform: uppercase;
+  color: var(--white);
+  animation: titleIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Typewriter — the ghost reserves size; the typed copy overlays it. */
+.typeWrap {
+  position: relative;
+  width: 448px;
+}
+
+.ghost,
+.typed {
+  margin: 0;
+  width: 448px;
+  font-weight: 400;
+  font-size: 22px;
+  letter-spacing: 2.42px;
+  line-height: normal;
+  color: var(--white);
+  white-space: pre-wrap;
+}
+
+.ghost {
+  visibility: hidden;
+}
+
+.typed {
+  position: absolute;
+  inset: 0;
+}
+
+.cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 2px;
+  background: var(--white);
+  transform: translateY(2px);
+  animation: blink 0.9s steps(1) infinite;
+}
+
+/* Screen-reader-only full text (no layout impact). */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 767px) {
+  .content {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 100%;
+    max-width: none;
+    gap: 24px;
+    padding-inline: max(24px, env(safe-area-inset-left));
+  }
+  .title {
+    font-size: 32px;
+  }
+  .typeWrap {
+    width: 100%;
+  }
+  .ghost,
+  .typed {
+    width: 100%;
+    font-size: 16px;
+    letter-spacing: 0.8px;
+  }
+}
+
+@keyframes titleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}

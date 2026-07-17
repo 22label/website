@@ -1,0 +1,92 @@
+/* Shared shell — single no-scroll viewport + anchored corners (64px). */
+
+.viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh; /* fallback */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Shared typography roles */
+.label {
+  color: var(--muted);
+}
+.value {
+  color: var(--white);
+}
+
+/* Shared divider — 1px light line, 22px wide */
+.divider {
+  display: block;
+  width: 22px;
+  height: 1px;
+  background: var(--divider);
+}
+
+/* ---------- TOP-LEFT : logo (preserved) ---------- */
+.topLeft {
+  position: fixed;
+  top: var(--corner-gap);
+  left: var(--corner-gap);
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-menu);
+}
+/* Logo is a Home link — no visual change, comfortable hit area. */
+.logoLink {
+  display: inline-flex;
+  width: fit-content;
+}
+.logoLink:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 4px;
+  border-radius: 1px;
+}
+
+.logo {
+  display: block;
+  width: 274px;
+  height: 24px;
+}
+.subtitle {
+  margin-top: 16px;
+  color: var(--muted);
+}
+
+/* ---------- BOTTOM-LEFT : information (node 204:7073) ---------- */
+.info {
+  position: fixed;
+  bottom: var(--corner-gap);
+  left: var(--corner-gap);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 22px;
+  width: fit-content;
+  z-index: var(--z-menu);
+}
+
+.infoGroup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  width: fit-content;
+}
+
+.infoCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+/* Desktop-only corners — the mobile header/menu replace them <=767px. */
+@media (max-width: 767px) {
+  .topLeft,
+  .info {
+    display: none;
+  }
+}

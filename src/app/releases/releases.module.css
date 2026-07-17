@@ -1,0 +1,199 @@
+/* Releases page content — anchored at left 520 / top 128 (desktop ref). */
+.content {
+  position: absolute;
+  left: var(--page-content-x);
+  top: var(--page-content-y);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 48px; /* title -> release block */
+  max-width: var(--page-content-max-width);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 64px;
+  line-height: normal;
+  letter-spacing: normal;
+  text-transform: uppercase;
+  color: var(--white);
+  white-space: nowrap;
+  animation: titleIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Horizontal rail — future releases appear to the right without a rebuild. */
+.rail {
+  display: flex;
+  flex-direction: row;
+  gap: 24px;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  animation: blockIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+}
+.rail::-webkit-scrollbar {
+  height: 4px;
+}
+.rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+.rail:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 6px;
+}
+
+.card {
+  flex: 0 0 228px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.divider {
+  display: block;
+  width: 22px;
+  height: 1px;
+  background: var(--divider);
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 228px;
+  white-space: nowrap;
+}
+
+.comingSoon {
+  color: var(--muted);
+}
+.value {
+  color: var(--white);
+}
+
+.cover {
+  display: block;
+  width: 228px;
+  height: 228px;
+  object-fit: cover;
+}
+
+/* Platform buttons — 5, evenly spaced across the 228px cover width. */
+.platforms {
+  width: 228px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.platformBtn {
+  width: 32px;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--white); /* active icon colour (via currentColor mask) */
+}
+
+/* Active platform buttons — minimal, elegant hover/focus/active recolour. */
+a.platformBtn {
+  cursor: pointer;
+  transition: color 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+a.platformBtn:hover,
+a.platformBtn:focus-visible,
+a.platformBtn:active {
+  color: var(--muted);
+}
+
+/* Icon rendered as a currentColor mask so recolour just works. */
+.platformIcon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  background-color: currentColor;
+  mask-image: var(--icon);
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: var(--icon);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+
+/* Disabled platforms — 20% opacity, not clickable, no hover reaction. */
+.platformDisabled {
+  cursor: default;
+}
+.platformDisabled .platformIcon {
+  opacity: 0.2;
+}
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 767px) {
+  .content {
+    left: 0;
+    top: calc(env(safe-area-inset-top) + 138px);
+    transform: none;
+    width: 100%;
+    max-width: none;
+    gap: 24px;
+    padding: 0 max(24px, env(safe-area-inset-left));
+  }
+  .title {
+    font-size: 32px;
+  }
+  /* Carousel — one card centred; future cards snap-scroll horizontally. */
+  .rail {
+    width: 100%;
+    max-width: none;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-left: calc((100% - 228px) / 2);
+    padding-right: calc((100% - 228px) / 2);
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+  .card {
+    scroll-snap-align: center;
+  }
+}
+
+@keyframes titleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes blockIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

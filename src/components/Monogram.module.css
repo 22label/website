@@ -1,0 +1,48 @@
+/* Home centre — WebGL canvas (marquee + glass monogram) + flat SVG fallback.
+   Pinned full-viewport, sits BEHIND the corner interface. */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none; /* never blocks navigation clicks */
+  overflow: hidden;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Mobile: the canvas captures vertical drag to rotate the monogram.
+   touch-action:none prevents the page from scrolling during the drag; the
+   corner UI sits above (higher z-index) so its taps still work. */
+@media (max-width: 767px) {
+  .canvas {
+    pointer-events: auto;
+    touch-action: none;
+  }
+}
+
+/* Flat SVG fallback — fitted to (viewport height - 128px) with a strict 64px
+   margin top and bottom, matching the fitted glass structure (navy #142241
+   @11% fill, no outline). Shown until the geometry is ready. */
+.fallback {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: calc(100vh - 128px); /* fallback */
+  height: calc(100dvh - 128px);
+  width: auto;
+  aspect-ratio: 490 / 848;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.45s ease;
+  will-change: opacity;
+}
+
+.fallbackHidden {
+  opacity: 0;
+}
