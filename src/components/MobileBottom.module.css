@@ -1,7 +1,7 @@
-/* Home mobile bottom section (node 204:8528). Home-only, mobile-only. Anchored
-   at the bottom of the Home viewport: player left, animated info right. Sits at
-   --z-menu, below the mobile menu overlay so the overlay fully covers it. The
-   animated info block styles itself (AnimatedInfo, variant="mobile"). */
+/* Global mobile bottom section (node 204:8528). Mobile-only, all routes.
+   Anchored at the bottom of the viewport: player left, animated info right.
+   Sits at --z-menu, below the mobile menu overlay so the overlay fully covers
+   it. The animated info block styles itself (AnimatedInfo, variant="mobile"). */
 .bottom {
   position: absolute;
   left: 0;

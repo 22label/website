@@ -3,16 +3,19 @@
 import { useEffect, useState } from "react";
 import MusicPlayerControl from "./MusicPlayerControl";
 import AnimatedInfo from "./AnimatedInfo";
-import styles from "./HomeMobileBottom.module.css";
+import styles from "./MobileBottom.module.css";
 
 /**
- * Home mobile bottom section (nodes 204:8528 / 204:6998). Mobile-only (<768px),
- * Home-only. Replaces the previous static mobile bottom info: music player on
- * the left, animated studio-info block on the right. Anchored at the bottom of
- * the Home viewport, it stays in the DOM under the mobile menu overlay (which
- * covers it when open). Never mounted on desktop, so only one <audio> exists.
+ * Global mobile bottom section (node 204:8528). Rendered ONCE in the shared
+ * Shell, so it shows on EVERY mobile route (Home, Releases, A Day With, About,
+ * …). Music player on the left, animated studio-info block on the right.
+ *
+ * Living in the persistent layout means it is never remounted on client-side
+ * navigation: the audio (global AudioProvider) keeps playing from the same
+ * timestamp and the 3s info animation never resets. It stays at --z-menu, below
+ * the mobile menu overlay, so the overlay fully covers it when open.
  */
-export default function HomeMobileBottom() {
+export default function MobileBottom() {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {

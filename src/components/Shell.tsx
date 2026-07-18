@@ -3,6 +3,7 @@ import Nav from "@/components/Nav";
 import MobileNav from "@/components/MobileNav";
 import ReleasePreviewer from "@/components/ReleasePreviewer";
 import DesktopRail from "@/components/DesktopRail";
+import MobileBottom from "@/components/MobileBottom";
 import styles from "./Shell.module.css";
 
 /**
@@ -43,6 +44,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       {/* BOTTOM-RIGHT — release previewer (unchanged behaviour) */}
       <ReleasePreviewer />
+
+      {/* MOBILE — global bottom section (player + animated info, all routes) */}
+      <MobileBottom />
 
       {/* MOBILE — header + menu overlay (hidden on desktop) */}
       <MobileNav />
