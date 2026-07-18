@@ -28,7 +28,7 @@
 }
 
 /* Flat SVG fallback — fitted to (viewport height - 128px) with a strict 64px
-   margin top and bottom, matching the fitted glass structure (navy #142241
+   margin top and bottom, matching the fitted glass structure (#B0C7FD
    @11% fill, no outline). Shown until the geometry is ready. */
 .fallback {
   position: absolute;

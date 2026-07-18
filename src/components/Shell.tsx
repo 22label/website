@@ -42,7 +42,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <span className={styles.divider} aria-hidden="true" />
           <div className={styles.infoCopy}>
             <span className={styles.label}>BASE</span>
-            <span className={styles.value}>BARCELONA, SPAIN</span>
+            <span className={styles.value}>BARCELONA [ES]</span>
           </div>
         </div>
         <div className={styles.infoGroup}>

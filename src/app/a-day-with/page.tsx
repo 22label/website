@@ -43,6 +43,7 @@ export default function ADayWithPage() {
           <div className={styles.placeholder}>
             <div className={styles.placeholderText}>
               <span className={styles.value}>EPISODE 002</span>
+              <span className={styles.value}>JOVONN</span>
               <span className={styles.muted}>COMING SOON</span>
             </div>
           </div>

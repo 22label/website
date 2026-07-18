@@ -14,12 +14,12 @@ export default function Home() {
           <span className={styles.divider} aria-hidden="true" />
           <div className={styles.copy}>
             <span className={styles.label}>BASE</span>
-            <span className={styles.value}>BARCELONA, SPAIN</span>
+            <span className={styles.value}>BARCELONA [ES]</span>
           </div>
         </div>
-        <div className={styles.group}>
+        <div className={`${styles.group} ${styles.groupEnd}`}>
           <span className={styles.divider} aria-hidden="true" />
-          <div className={styles.copy}>
+          <div className={`${styles.copy} ${styles.copyEnd}`}>
             <span className={styles.label}>EST.</span>
             <span className={styles.value}>2026</span>
           </div>

@@ -24,8 +24,23 @@ const BEVEL_SIZE = 2;
 const BEVEL_SEGMENTS = 6;
 const MARGIN = 64;
 
-const WHEEL_SENSITIVITY = 0.0009;
-const DAMPING = 0.93;
+// --- Rotation inertia (frame-rate independent; radians + radians/second) ---
+// Each wheel/trackpad event imparts an impulse to the angular velocity; the
+// velocity then decays with exponential friction and rotation integrates it
+// over real time, so the monogram keeps spinning briefly after input stops.
+const IMPULSE_STRENGTH = 0.06; // rad/s added per unit of normalized wheel delta
+const DAMPING_RATE = 3.8; // exponential friction, per second (~1.2s to rest)
+const MAX_ANGULAR_VELOCITY = 50; // rad/s cap — technical guard, not felt in use
+const STOP_THRESHOLD = 0.02; // rad/s — below this, snap to 0 (also gates cooldown)
+const DRAG_SENSITIVITY = 0.0036; // rad per px of touch drag (unchanged feel)
+const REDUCED_MOTION_ROTATE = 0.0006; // rad per delta unit, direct + no inertia
+
+// --- Chromatic heating (thermal state driven by sustained scroll) ----------
+const HEAT_HEX_COLD = 0xb0c7fd; // resting colour (#B0C7FD @ 11% visual)
+const HEAT_HEX_HOT = 0xff0004; // fully heated colour (#FF0004 @ 22% visual)
+const HEAT_DURATION_MS = 3000; // sustained scroll needed to reach full heat
+const COOLDOWN_DURATION_MS = 1500; // full cool-down back to the cold state
+const SCROLL_CONTINUITY_MS = 280; // gap under which scrolling counts as continuous
 
 // RGB glitch
 const GLITCH_TIMES_MS = [3000, 12000, 24000];
@@ -267,13 +282,13 @@ export default function Monogram() {
       // Legacy material (only for the ?glass=legacy comparison path).
       const makeLegacyMaterial = () =>
         new THREE.MeshPhysicalMaterial({
-          color: 0x142241,
+          color: 0xb0c7fd,
           metalness: 0.0,
           roughness: isMobile ? 0.14 : 0.16,
           transmission: isMobile ? 0.55 : 0.62,
           thickness: isMobile ? 210 : 180,
           ior: isMobile ? 1.32 : 1.45,
-          attenuationColor: new THREE.Color(0x142241),
+          attenuationColor: new THREE.Color(0xb0c7fd),
           attenuationDistance: isMobile ? 140 : 180,
           dispersion: isMobile ? 0.1 : 0.06,
           clearcoat: isMobile ? 1.0 : 0.9,
@@ -296,7 +311,7 @@ export default function Monogram() {
       // for the larger viewport.
       const LIQUID_GLASS_PROFILES = {
         mobile: {
-          refraction: 0.032,
+          refraction: 0.0384, // was 0.032, +20% optical lensing
           blur: 0.006,
           chroma: 0.006,
           tintStrength: 0.2,
@@ -310,7 +325,7 @@ export default function Monogram() {
           },
         },
         desktop: {
-          refraction: 0.011, // ~19px @1728
+          refraction: 0.0132, // was 0.011 (~19px @1728) -> +20% (~23px @1728)
           blur: 0.0045, // ~8px @1728
           chroma: 0.0013, // ~2px @1728
           tintStrength: 0.17,
@@ -448,7 +463,7 @@ export default function Monogram() {
             uRefractionStrength: { value: profile.refraction },
             uBlurStrength: { value: profile.blur },
             uChromaticAberration: { value: profile.chroma },
-            uTint: { value: new THREE.Color(0x142241) },
+            uTint: { value: new THREE.Color(0xb0c7fd) },
             uTintStrength: { value: profile.tintStrength },
             uFresnelStrength: { value: profile.fresnel },
             uSpecularStrength: { value: profile.specular },
@@ -475,6 +490,37 @@ export default function Monogram() {
       }
       const mesh = new THREE.Mesh(geometry, meshMaterial);
       scene.add(mesh);
+
+      // --- Thermal (chromatic) state -----------------------------------------
+      // ONE reusable colour is lerped between cold and hot in HSL, so the sweep
+      // travels blue -> violet -> pink -> red (no dirty greys). `heat` is the
+      // linear 0..1 thermal level; a smoothstep eases it before it drives the
+      // colour and the tint weight. No per-frame allocation: COLD/HOT/heatColor
+      // are created once and copied into. The custom liquid glass has no literal
+      // opacity (it is an opaque refractive solid) — the visual weight of its
+      // navy/red tint is uTintStrength, so we scale that from its base (the 11%
+      // look) to ~2x (the 22% look) as it heats, leaving refraction untouched.
+      const COLD = new THREE.Color(HEAT_HEX_COLD);
+      const HOT = new THREE.Color(HEAT_HEX_HOT);
+      const heatColor = new THREE.Color(HEAT_HEX_COLD);
+      const baseTint = profile.tintStrength;
+      let heat = 0; // 0..1 linear thermal level
+      let appliedHeat = -1; // last heat written to the material (skips redundant work)
+      const applyHeat = () => {
+        if (heat === appliedHeat) return;
+        appliedHeat = heat;
+        const eased = heat * heat * (3 - 2 * heat); // smoothstep
+        heatColor.copy(COLD).lerpHSL(HOT, eased);
+        if (useCustomGlass && glassShader) {
+          glassShader.uniforms.uTint.value.copy(heatColor);
+          // 11% look -> ~22% look: double the tint's visual weight at full heat.
+          glassShader.uniforms.uTintStrength.value = baseTint * (1 + eased);
+        } else if (!useCustomGlass) {
+          const m = meshMaterial as import("three").MeshPhysicalMaterial;
+          m.color.copy(heatColor);
+          m.attenuationColor.copy(heatColor);
+        }
+      };
 
       // --- RGB glitch ghosts (children of the mesh) --------------------------
       const glitchColors = [0xff2233, 0x22ff44, 0x2244ff];
@@ -515,7 +561,8 @@ export default function Monogram() {
       applyFit();
 
       // --- Loop (continuous: the marquee scrolls every frame) ----------------
-      let angularVelocity = 0;
+      let angularVelocity = 0; // rad/s
+      let lastInputTime = -Infinity; // performance.now() of the last scroll/drag
       let rafId = 0;
       let lastFrame = performance.now();
       let marqueeOffsetFrac = 0; // 0..1, resolution-independent scroll phase
@@ -562,6 +609,7 @@ export default function Monogram() {
         glassShader = makeGlassShader(tier);
         glassShader.uniforms.uResolution.value.set(vw, vh);
         mesh.material = glassShader;
+        appliedHeat = -1; // new shader reset uTint/uTintStrength — reapply heat
         oldShader?.dispose();
         oldRT?.dispose();
       };
@@ -597,12 +645,34 @@ export default function Monogram() {
       const loop = (now: number) => {
         const dt = Math.min(64, now - lastFrame);
         lastFrame = now;
+        const dtSec = dt / 1000;
 
         // marquee scroll phase (right -> left), resolution-independent + seamless
         marqueeOffsetFrac = (marqueeOffsetFrac + dt / MARQUEE_CYCLE_MS) % 1;
 
-        mesh.rotation.y += angularVelocity;
-        angularVelocity *= DAMPING;
+        // --- Rotation inertia (frame-rate independent) -----------------------
+        mesh.rotation.y += angularVelocity * dtSec;
+        angularVelocity *= Math.exp(-DAMPING_RATE * dtSec); // exponential friction
+        if (angularVelocity > MAX_ANGULAR_VELOCITY)
+          angularVelocity = MAX_ANGULAR_VELOCITY;
+        else if (angularVelocity < -MAX_ANGULAR_VELOCITY)
+          angularVelocity = -MAX_ANGULAR_VELOCITY;
+        if (Math.abs(angularVelocity) < STOP_THRESHOLD) angularVelocity = 0;
+
+        // --- Thermal heating / cooldown --------------------------------------
+        // Heating while scrolling is continuous; hold the level while coasting
+        // on inertia; cool only once the rotation has truly stopped. Disabled
+        // under reduced motion (stays cold/readable).
+        if (!prefersReducedMotion) {
+          const scrolling = now - lastInputTime < SCROLL_CONTINUITY_MS;
+          if (scrolling) {
+            heat = Math.min(1, heat + dt / HEAT_DURATION_MS);
+          } else if (angularVelocity === 0) {
+            heat = Math.max(0, heat - dt / COOLDOWN_DURATION_MS);
+          }
+          applyHeat();
+        }
+
         updateGlitch(now);
 
         // animate the liquid refraction (frozen under reduced motion)
@@ -649,8 +719,20 @@ export default function Monogram() {
       };
       const onWheel = (e: WheelEvent) => {
         e.preventDefault();
-        if (prefersReducedMotion) return;
-        angularVelocity += normalizeWheel(e) * WHEEL_SENSITIVITY;
+        const nd = normalizeWheel(e);
+        if (prefersReducedMotion) {
+          // No prolonged inertia under reduced motion: a small direct nudge.
+          mesh.rotation.y += nd * REDUCED_MOTION_ROTATE;
+          return;
+        }
+        // Impulse: a fast scroll adds more; opposite scroll brakes then reverses;
+        // a scroll mid-decel stacks on the surviving velocity.
+        lastInputTime = performance.now();
+        angularVelocity += nd * IMPULSE_STRENGTH;
+        if (angularVelocity > MAX_ANGULAR_VELOCITY)
+          angularVelocity = MAX_ANGULAR_VELOCITY;
+        else if (angularVelocity < -MAX_ANGULAR_VELOCITY)
+          angularVelocity = -MAX_ANGULAR_VELOCITY;
       };
       window.addEventListener("wheel", onWheel, { passive: false });
 
@@ -660,20 +742,30 @@ export default function Monogram() {
       // corner UI isn't (higher z-index), so links stay tappable.
       let dragging = false;
       let lastPointerY = 0;
+      let lastPointerT = 0;
       const onPointerDown = (e: PointerEvent) => {
         if (prefersReducedMotion) return;
         dragging = true;
         lastPointerY = e.clientY;
+        lastPointerT = performance.now();
         angularVelocity = 0;
         canvas.setPointerCapture?.(e.pointerId);
       };
       const onPointerMove = (e: PointerEvent) => {
         if (!dragging) return;
+        const t = performance.now();
         const dy = e.clientY - lastPointerY;
+        const dtp = Math.max(0.001, (t - lastPointerT) / 1000);
         lastPointerY = e.clientY;
-        // match wheel feel (deltaY -> rotation)
-        angularVelocity += dy * WHEEL_SENSITIVITY;
-        mesh.rotation.y += dy * WHEEL_SENSITIVITY * 4;
+        lastPointerT = t;
+        lastInputTime = t; // drag also feeds the heat timer
+        const deltaRot = dy * DRAG_SENSITIVITY;
+        mesh.rotation.y += deltaRot; // direct 1:1 manipulation
+        // Carry the instantaneous drag speed as velocity so release keeps inertia.
+        let v = deltaRot / dtp;
+        if (v > MAX_ANGULAR_VELOCITY) v = MAX_ANGULAR_VELOCITY;
+        else if (v < -MAX_ANGULAR_VELOCITY) v = -MAX_ANGULAR_VELOCITY;
+        angularVelocity = v;
       };
       const onPointerUp = (e: PointerEvent) => {
         if (!dragging) return;

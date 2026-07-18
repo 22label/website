@@ -5,22 +5,23 @@
 }
 
 /* Home mobile bottom info — node 204:8528 (Home only; NOT shared with the
-   other mobile pages or desktop). Row layout, 12px, own spacing. */
+   other mobile pages or desktop). Space-between bar: BASE group left, EST.
+   group right-aligned. 24px auto-layout padding, anchored to the bottom. */
 @media (max-width: 767px) {
   .mobileInfo {
     position: absolute;
     left: 0;
     right: 0;
-    bottom: max(24px, env(safe-area-inset-bottom));
+    bottom: 0;
     width: 100%;
-    min-height: 94px;
     box-sizing: border-box;
     z-index: var(--z-menu);
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 22px;
+    justify-content: space-between;
     padding: 24px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
     padding-left: max(24px, env(safe-area-inset-left));
     padding-right: max(24px, env(safe-area-inset-right));
   }
@@ -32,12 +33,20 @@
     gap: 8px;
     width: fit-content;
   }
+  /* EST. group hugs the right edge (node 204:8534). */
+  .groupEnd {
+    align-items: flex-end;
+  }
 
   .copy {
     display: flex;
     flex-direction: column;
     gap: 8px;
     white-space: nowrap;
+  }
+  .copyEnd {
+    align-items: flex-end;
+    text-align: right;
   }
 
   .divider {
@@ -47,16 +56,17 @@
     background: var(--divider);
   }
 
-  .label,
+  /* Label (BASE / EST.) 8px; value (BARCELONA [ES] / 2026) 12px. */
+  .label {
+    font-size: 8px;
+    letter-spacing: 0.88px;
+    line-height: normal;
+    color: var(--muted);
+  }
   .value {
     font-size: 12px;
     letter-spacing: 1.32px;
     line-height: normal;
-  }
-  .label {
-    color: var(--muted);
-  }
-  .value {
     color: var(--white);
   }
 }
