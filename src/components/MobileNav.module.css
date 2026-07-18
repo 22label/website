@@ -144,3 +144,39 @@
     transform: none;
   }
 }
+
+/* Safari iOS occasionally paints a stray rounded white outline/highlight on the
+   last-tapped menu item or on the burger/close button, and it can jump around.
+   It is not part of the design — strip every browser-generated outline, ring,
+   shadow, border, background and tap highlight for the mobile menu links and the
+   burger/close button. Scoped to touch / coarse-pointer devices only, so the
+   desktop keyboard focus rings (a:focus-visible, .iconBtn:focus-visible) are
+   left completely untouched. */
+@media (hover: none) and (pointer: coarse) {
+  .menuNav a,
+  .iconBtn {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+    box-shadow: none;
+    border: 0;
+    background-color: transparent;
+  }
+
+  .menuNav a:focus,
+  .menuNav a:focus-visible,
+  .menuNav a:active,
+  .menuNav a:visited,
+  .menuNav a:hover,
+  .iconBtn:focus,
+  .iconBtn:focus-visible,
+  .iconBtn:active,
+  .iconBtn:hover {
+    outline: none;
+    box-shadow: none;
+    border: 0;
+    background-color: transparent;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
