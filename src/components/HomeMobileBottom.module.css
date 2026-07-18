@@ -1,0 +1,27 @@
+/* Home mobile bottom section (node 204:8528). Home-only, mobile-only. Anchored
+   at the bottom of the Home viewport: player left, animated info right. Sits at
+   --z-menu, below the mobile menu overlay so the overlay fully covers it. The
+   animated info block styles itself (AnimatedInfo, variant="mobile"). */
+.bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(25px, env(safe-area-inset-bottom));
+  width: 100%;
+  box-sizing: border-box;
+  z-index: var(--z-menu);
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 24px;
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+
+/* Desktop guard (the component also gates its mount to <768px). */
+@media (min-width: 768px) {
+  .bottom {
+    display: none;
+  }
+}

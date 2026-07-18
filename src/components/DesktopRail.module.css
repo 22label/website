@@ -1,0 +1,22 @@
+/* Desktop bottom-left rail: one shared anchor (left:64 / bottom:64) holding the
+   animated info block and the player, so their alignment and 64px gap are always
+   correct. Above the marquee/WebGL/gradients; only the player button is
+   interactive (the rail itself never blocks the canvas). */
+.rail {
+  position: fixed;
+  left: 64px;
+  bottom: 64px;
+  z-index: 6;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 64px;
+  pointer-events: none;
+}
+
+/* Desktop-only (the component also gates its mount to >=768px). */
+@media (max-width: 767px) {
+  .rail {
+    display: none;
+  }
+}

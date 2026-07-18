@@ -7,6 +7,9 @@
   --white: #ffffff;
   --muted: #919191;
   --divider: rgba(255, 255, 255, 0.45);
+  /* Single source of truth for every 1px bar (player lines + info bars), so
+     they render identically. Reference: the bottom-left info bar. */
+  --bar-thickness: 1px;
 
   /* Exact dark gradient exported from Figma */
   --page-gradient: linear-gradient(

@@ -1,0 +1,131 @@
+/* Animated studio-info block — shared by the desktop rail (node 212:601) and
+   the Home mobile bottom section (node 212:554). Text viewport on top, static
+   line below. Desktop = left-aligned 151px; mobile = right-aligned 113px. */
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* text viewport -> line */
+}
+.desktop {
+  align-items: flex-start;
+  width: 151px;
+}
+.mobile {
+  align-items: flex-end;
+  width: 113px;
+}
+
+/* Fixed-height window; both phases share one grid cell so height is constant. */
+.infoViewport {
+  display: grid;
+  overflow: hidden;
+}
+
+.phase {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  white-space: nowrap;
+}
+.desktop .phase {
+  align-items: flex-start;
+  text-align: left;
+}
+.mobile .phase {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.infoLabel {
+  color: var(--muted);
+}
+.infoValue {
+  color: var(--white);
+}
+/* Desktop: both rows 16px / 1.76px. */
+.desktop .infoLabel,
+.desktop .infoValue {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  line-height: normal;
+}
+/* Mobile: label 8px / 0.88px, value 12px / 1.32px. */
+.mobile .infoLabel {
+  font-size: 8px;
+  letter-spacing: 0.88px;
+  line-height: normal;
+}
+.mobile .infoValue {
+  font-size: 12px;
+  letter-spacing: 1.32px;
+  line-height: normal;
+}
+
+/* Static line — never moves, fades, resizes, or re-mounts. */
+.infoLine {
+  display: block;
+  height: var(--bar-thickness);
+  background: var(--divider);
+}
+.desktop .infoLine {
+  width: 151px;
+}
+.mobile .infoLine {
+  width: 113px;
+}
+
+/* Current row enters from just below + fades in; leaving row rises + fades out. */
+.phaseEnter {
+  animation: infoEnter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.phaseLeave {
+  animation: infoLeave 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes infoEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes infoLeave {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* Reduced motion: keep the 3s alternation but drop the vertical movement. */
+@media (prefers-reduced-motion: reduce) {
+  .phaseEnter {
+    animation: infoFadeIn 0.4s ease both;
+  }
+  .phaseLeave {
+    animation: infoFadeOut 0.4s ease both;
+  }
+}
+@keyframes infoFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes infoFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

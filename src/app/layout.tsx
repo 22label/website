@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import Shell from "@/components/Shell";
+import AudioProvider from "@/components/AudioProvider";
 
 /**
  * Clash Display (Fontshare, ITF Free Font License) — self-hosted under
@@ -57,8 +58,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={clashDisplay.variable}>
       <body>
-        {/* Shared shell: single no-scroll viewport + the four anchored corners */}
-        <Shell>{children}</Shell>
+        {/* One persistent audio element for the whole app (survives client-side
+            navigation), shared by the desktop rail + Home-mobile players. */}
+        <AudioProvider>
+          {/* Shared shell: single no-scroll viewport + the anchored corners */}
+          <Shell>{children}</Shell>
+        </AudioProvider>
       </body>
     </html>
   );

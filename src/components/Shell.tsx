@@ -2,6 +2,7 @@ import Link from "next/link";
 import Nav from "@/components/Nav";
 import MobileNav from "@/components/MobileNav";
 import ReleasePreviewer from "@/components/ReleasePreviewer";
+import DesktopRail from "@/components/DesktopRail";
 import styles from "./Shell.module.css";
 
 /**
@@ -36,23 +37,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       {/* TOP-RIGHT — navigation + social */}
       <Nav />
 
-      {/* BOTTOM-LEFT — information */}
-      <section className={styles.info} aria-label="Studio information">
-        <div className={styles.infoGroup}>
-          <span className={styles.divider} aria-hidden="true" />
-          <div className={styles.infoCopy}>
-            <span className={styles.label}>BASE</span>
-            <span className={styles.value}>BARCELONA [ES]</span>
-          </div>
-        </div>
-        <div className={styles.infoGroup}>
-          <span className={styles.divider} aria-hidden="true" />
-          <div className={styles.infoCopy}>
-            <span className={styles.label}>EST.</span>
-            <span className={styles.value}>2026</span>
-          </div>
-        </div>
-      </section>
+      {/* BOTTOM-LEFT — animated studio info + persistent music player (desktop,
+          all routes; renders nothing on mobile) */}
+      <DesktopRail />
 
       {/* BOTTOM-RIGHT — release previewer (unchanged behaviour) */}
       <ReleasePreviewer />

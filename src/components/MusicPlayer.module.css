@@ -1,18 +1,19 @@
-/* Home-desktop-only music player (node 212:500). Fixed at left:64px, its
-   `bottom` is set inline (measured 64px above the bottom-left block). Foreground
-   UI, above the corner menu; only the button is interactive. */
-.dock {
-  position: fixed;
-  left: 64px;
-  z-index: 6; /* above --z-menu (5); never blocks the monogram/marquee */
-  pointer-events: none;
-}
+/* Music player control (desktop node 212:471/484, mobile node 212:566).
+   Placement is handled by the parent (desktop rail / Home mobile section); this
+   file styles the button itself. Only the button is interactive. */
 
-/* Hard desktop-only guard (the component also gates its mount at >=768px). */
-@media (max-width: 767px) {
-  .dock {
-    display: none;
-  }
+/* Per-variant sizing tokens. OFF line is 73px for both. */
+.control {
+  --title-w: 119px;
+  --on-line: 151px;
+  --font: 14px;
+  --ls: 1.54px;
+}
+.mobile {
+  --title-w: 81px;
+  --on-line: 113px;
+  --font: 12px;
+  --ls: 1.32px;
 }
 
 .toggle {
@@ -20,7 +21,7 @@
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px; /* vertical gap: top row -> line (node 212:471) */
+  gap: 8px; /* top row -> line */
   margin: 0;
   padding: 0;
   border: 0;
@@ -32,7 +33,7 @@
   -webkit-appearance: none;
   appearance: none;
 }
-/* Comfortable, accessible hit area even in the 16px OFF state — no layout shift. */
+/* Accessible hit area covering the icon + PLAY/title, without layout shift. */
 .toggle::before {
   content: "";
   position: absolute;
@@ -41,7 +42,6 @@
 .toggle:focus {
   outline: none;
 }
-/* Keyboard-only focus ring; nothing persistent after a mouse click / tap. */
 .toggle:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 6px;
@@ -51,7 +51,7 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 16px; /* icon -> title (node 211:182) */
+  gap: 16px; /* icon -> label */
   height: 16px;
 }
 
@@ -62,15 +62,39 @@
   flex-shrink: 0;
 }
 
-/* Title window: 188px wide, clipped. Hidden (0 width) in the OFF state. */
+/* Zero-width slot: PLAY and the title window overlay here (absolute), so the
+   button width is driven by the line and there is no layout jump on toggle. */
+.labelSlot {
+  position: relative;
+  width: 0;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.playLabel {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font-size: var(--font);
+  letter-spacing: var(--ls);
+  line-height: 16px;
+  color: #fff;
+  opacity: 1; /* visible in OFF */
+  transition: opacity 0.2s ease 0.18s; /* fades in after the title has gone */
+}
+
 .titleClip {
+  position: absolute;
+  left: 0;
+  top: 0;
   width: 0;
   height: 16px;
   overflow: hidden;
   opacity: 0;
   transition:
-    opacity 220ms ease,
-    width 460ms cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 0.14s ease,
+    width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .marquee {
@@ -84,46 +108,41 @@
   display: inline-block;
   white-space: nowrap;
   padding-right: 40px; /* seam gap between the two looped copies */
-  font-size: 14px;
-  letter-spacing: 1.54px;
+  font-size: var(--font);
+  letter-spacing: var(--ls);
   line-height: 16px;
   color: #fff;
 }
 
-/* ON/OFF graphic line (not a progress bar): 16px OFF, 220px ON. */
+/* ON/OFF graphic line (not a progress bar): 73px OFF, --on-line ON. */
 .line {
   display: block;
-  width: 16px;
-  height: 1px;
-  background: #fff;
-  transition: width 460ms cubic-bezier(0.4, 0, 0.2, 1);
+  width: 73px;
+  height: var(--bar-thickness);
+  background: var(--divider);
+  transition: width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ---------- ON ---------- */
+.toggle[data-state="on"] .playLabel {
+  opacity: 0;
+  transition: opacity 0.14s ease; /* fades out fast when going ON */
+}
 .toggle[data-state="on"] .titleClip {
-  width: 188px;
+  width: var(--title-w);
   opacity: 1;
-  transition-delay: 120ms; /* reveals just after the line starts extending */
+  transition:
+    opacity 0.2s ease 0.18s, /* appears after PLAY has faded */
+    width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .toggle[data-state="on"] .line {
-  width: 220px;
+  width: var(--on-line);
 }
 .toggle[data-state="on"] .marquee {
   animation: marquee 12s linear infinite;
   animation-delay: 420ms; /* starts only once the title is visible */
 }
 
-/* ---------- OFF ---------- */
-.toggle[data-state="off"] .titleClip {
-  width: 0;
-  opacity: 0; /* title fades out quickly first */
-}
-.toggle[data-state="off"] .line {
-  width: 16px;
-  transition-delay: 180ms; /* line retracts only after the title has faded */
-}
-
-/* Seamless: two identical copies; -50% shifts exactly one copy + seam. */
 @keyframes marquee {
   from {
     transform: translateX(0);
