@@ -15,7 +15,7 @@ export default function ADayWithPage() {
           {/* Episode 001 — whole card is the link */}
           <a
             className={styles.card}
-            href="https://www.youtube.com/watch?v=YGRvNsLY0Ag&t=286s"
+            href="https://www.youtube.com/watch?v=YGRvNsLY0Ag"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Watch A Day with Terence :Terry: — Episode 001 on YouTube"

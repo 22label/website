@@ -75,9 +75,18 @@
   align-items: flex-end;
 }
 
+/* COMING SOON (compact only). On expand it fades out fast AND collapses its
+   height so it leaves no gap; on contract it fades back in once the block is
+   sufficiently collapsed. It is never overlaid on the expanded copy. */
 .comingSoon {
   color: var(--muted);
   white-space: nowrap;
+  overflow: hidden;
+  max-height: 24px;
+  opacity: 1;
+  transition:
+    opacity 0.3s ease 0.28s,
+    max-height 0.35s ease 0.22s;
 }
 
 /* Collapsible detail block — grid 0fr -> 1fr avoids any layout jump. */
@@ -125,29 +134,6 @@
   object-fit: cover;
 }
 
-/* Centred COMING SOON label over the cover — crisp, never scaled. */
-.coverLabel {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
-}
-
-.coverLabelPill {
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 8px;
-  padding: 10px;
-  color: var(--white);
-  white-space: nowrap;
-}
-
 @media (hover: hover) and (pointer: fine) {
   .release:hover .releaseDetails,
   .release:focus-within .releaseDetails {
@@ -163,9 +149,14 @@
     width: 220px;
     height: 220px;
   }
-  .release:hover .coverLabel,
-  .release:focus-within .coverLabel {
-    opacity: 1;
-    transform: translateY(0);
+  /* COMING SOON fades out quickly at the start of the expansion (gone before
+     the expanded copy is fully in) and collapses so it leaves no empty space. */
+  .release:hover .comingSoon,
+  .release:focus-within .comingSoon {
+    opacity: 0;
+    max-height: 0;
+    transition:
+      opacity 0.14s ease,
+      max-height 0.3s ease 0.06s;
   }
 }

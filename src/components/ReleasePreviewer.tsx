@@ -44,9 +44,6 @@ export default function ReleasePreviewer() {
           width={220}
           height={220}
         />
-        <span className={styles.coverLabel} aria-hidden="true">
-          <span className={styles.coverLabelPill}>COMING SOON</span>
-        </span>
       </div>
     </section>
   );
