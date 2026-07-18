@@ -43,15 +43,24 @@
 .cards {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start; /* cards share the same top line */
   gap: 24px;
 }
 
-/* Episode 001 card — the entire card is the link. */
+/* Each card: a 267px column — media/placeholder on top, caption below. */
 .card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px; /* media -> caption */
+  width: 267px;
+}
+
+/* Episode 001 media — the clickable link (267x150, 16:9). */
+.media {
   position: relative;
   display: block;
-  width: 267px;
+  width: 100%;
   height: 150px;
   border-radius: 16px;
   overflow: hidden;
@@ -81,41 +90,56 @@
     transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.card:focus-visible {
+.media:focus-visible {
   outline: 2px solid var(--white);
   outline-offset: 4px;
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .card:hover {
+  .media:hover {
     transform: scale(1.1);
     z-index: 2;
   }
-  .card:hover .cardImg {
+  .media:hover .cardImg {
     opacity: 0.5;
   }
-  .card:hover .playIcon {
+  .media:hover .playIcon {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
 }
 
 /* Keyboard users get the same presentation */
-.card:focus-visible {
+.media:focus-visible {
   transform: scale(1.1);
   z-index: 2;
 }
-.card:focus-visible .cardImg {
+.media:focus-visible .cardImg {
   opacity: 0.5;
 }
-.card:focus-visible .playIcon {
+.media:focus-visible .playIcon {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
 
-/* Episode 002 placeholder */
+/* Caption under each card (EPISODE / artist). */
+.caption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+.captionValue {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  line-height: normal;
+  color: var(--white);
+}
+
+/* Episode 002 placeholder — non-interactive; only COMING SOON, centred. */
 .placeholder {
-  width: 267px;
+  width: 100%;
   height: 150px;
   border: 1px solid #ffffff;
   border-radius: 16px;
@@ -123,21 +147,13 @@
   align-items: center;
   justify-content: center;
 }
-
-.placeholderText {
-  width: 130px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  text-align: center;
-}
-
-.value {
-  color: var(--white);
-}
-.muted {
+.comingSoon {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  line-height: normal;
   color: var(--muted);
+  white-space: nowrap;
+  text-align: center;
 }
 
 /* ---------- MOBILE ---------- */
@@ -158,11 +174,12 @@
     font-size: 16px;
     letter-spacing: 0.8px;
   }
-  /* Carousel — snap-scroll; next card peeks as in Figma. */
+  /* Carousel — snap-scroll; next card peeks as in Figma. Height grows with the
+     captions; overflow-y stays visible so nothing is clipped vertically. */
   .cards {
     width: calc(100vw - 48px);
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     scroll-snap-type: x mandatory;
     overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
@@ -171,12 +188,11 @@
   .cards::-webkit-scrollbar {
     display: none;
   }
-  .card,
-  .placeholder {
+  .card {
     flex: 0 0 267px;
     scroll-snap-align: start;
   }
-  .card:active {
+  .media:active {
     transform: scale(0.98);
   }
 }
