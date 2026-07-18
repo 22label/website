@@ -35,12 +35,16 @@ const STOP_THRESHOLD = 0.02; // rad/s — below this, snap to 0 (also gates cool
 const DRAG_SENSITIVITY = 0.0036; // rad per px of touch drag (unchanged feel)
 const REDUCED_MOTION_ROTATE = 0.0006; // rad per delta unit, direct + no inertia
 
-// --- Chromatic heating (thermal state driven by sustained scroll) ----------
+// --- Chromatic heating (thermal state driven by scroll intensity) ----------
 const HEAT_HEX_COLD = 0xb0c7fd; // resting colour (#B0C7FD @ 11% visual)
 const HEAT_HEX_HOT = 0xff0004; // fully heated colour (#FF0004 @ 22% visual)
-const HEAT_DURATION_MS = 3000; // sustained scroll needed to reach full heat
-const COOLDOWN_DURATION_MS = 1500; // full cool-down back to the cold state
+const HEAT_DURATION_MS = 2000; // full-speed sustained scroll to reach full heat
+const HEAT_FULL_SPEED = 8; // rad/s at/above which a scroll counts as "fast" (speedFactor=1)
+const COOLDOWN_DURATION_MS = 1000; // full cool-down back to the cold state
 const SCROLL_CONTINUITY_MS = 280; // gap under which scrolling counts as continuous
+// Frost — the monogram turns progressively blurry only near max heat.
+const BLUR_START = 0.78; // heatProgress at which frost begins (last stretch)
+const BLUR_MAX_ADD = 0.016; // extra refraction-blur (UV) added on top of base at full heat
 
 // RGB glitch
 const GLITCH_TIMES_MS = [3000, 12000, 24000];
@@ -500,21 +504,32 @@ export default function Monogram() {
       // opacity (it is an opaque refractive solid) — the visual weight of its
       // navy/red tint is uTintStrength, so we scale that from its base (the 11%
       // look) to ~2x (the 22% look) as it heats, leaving refraction untouched.
+      // Near max heat the monogram also frosts: we widen ONLY its own refraction
+      // blur (uBlurStrength) — a per-material uniform on the monogram fragments,
+      // so the marquee/background (a separate material) stay perfectly sharp.
       const COLD = new THREE.Color(HEAT_HEX_COLD);
       const HOT = new THREE.Color(HEAT_HEX_HOT);
       const heatColor = new THREE.Color(HEAT_HEX_COLD);
       const baseTint = profile.tintStrength;
+      const baseBlur = profile.blur; // liquid-glass base; frost adds on top
       let heat = 0; // 0..1 linear thermal level
       let appliedHeat = -1; // last heat written to the material (skips redundant work)
+      const smoothstep01 = (x: number) => x * x * (3 - 2 * x);
       const applyHeat = () => {
         if (heat === appliedHeat) return;
         appliedHeat = heat;
-        const eased = heat * heat * (3 - 2 * heat); // smoothstep
+        const eased = smoothstep01(heat); // smooth colour + opacity
         heatColor.copy(COLD).lerpHSL(HOT, eased);
+        // Frost ramps in only over BLUR_START..1, smoothly.
+        const frost = smoothstep01(
+          Math.min(1, Math.max(0, (heat - BLUR_START) / (1 - BLUR_START))),
+        );
         if (useCustomGlass && glassShader) {
           glassShader.uniforms.uTint.value.copy(heatColor);
           // 11% look -> ~22% look: double the tint's visual weight at full heat.
           glassShader.uniforms.uTintStrength.value = baseTint * (1 + eased);
+          // Blur ONLY the monogram's own optical content (its refraction taps).
+          glassShader.uniforms.uBlurStrength.value = baseBlur + frost * BLUR_MAX_ADD;
         } else if (!useCustomGlass) {
           const m = meshMaterial as import("three").MeshPhysicalMaterial;
           m.color.copy(heatColor);
@@ -666,7 +681,14 @@ export default function Monogram() {
         if (!prefersReducedMotion) {
           const scrolling = now - lastInputTime < SCROLL_CONTINUITY_MS;
           if (scrolling) {
-            heat = Math.min(1, heat + dt / HEAT_DURATION_MS);
+            // Accumulate heat in proportion to the REAL scroll intensity: a fast
+            // sustained scroll (speedFactor -> 1) reaches full heat in 2s; a slow
+            // scroll only warms partially; a brief impulse barely moves it.
+            const speedFactor = Math.min(
+              1,
+              Math.abs(angularVelocity) / HEAT_FULL_SPEED,
+            );
+            heat = Math.min(1, heat + (dt / HEAT_DURATION_MS) * speedFactor);
           } else if (angularVelocity === 0) {
             heat = Math.max(0, heat - dt / COOLDOWN_DURATION_MS);
           }
