@@ -1,0 +1,140 @@
+/* Home-desktop-only music player (node 212:500). Fixed at left:64px, its
+   `bottom` is set inline (measured 64px above the bottom-left block). Foreground
+   UI, above the corner menu; only the button is interactive. */
+.dock {
+  position: fixed;
+  left: 64px;
+  z-index: 6; /* above --z-menu (5); never blocks the monogram/marquee */
+  pointer-events: none;
+}
+
+/* Hard desktop-only guard (the component also gates its mount at >=768px). */
+@media (max-width: 767px) {
+  .dock {
+    display: none;
+  }
+}
+
+.toggle {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px; /* vertical gap: top row -> line (node 212:471) */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* Comfortable, accessible hit area even in the 16px OFF state — no layout shift. */
+.toggle::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+.toggle:focus {
+  outline: none;
+}
+/* Keyboard-only focus ring; nothing persistent after a mouse click / tap. */
+.toggle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 6px;
+  border-radius: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px; /* icon -> title (node 211:182) */
+  height: 16px;
+}
+
+.icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* Title window: 188px wide, clipped. Hidden (0 width) in the OFF state. */
+.titleClip {
+  width: 0;
+  height: 16px;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    opacity 220ms ease,
+    width 460ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.marquee {
+  display: inline-flex;
+  height: 16px;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.titleText {
+  display: inline-block;
+  white-space: nowrap;
+  padding-right: 40px; /* seam gap between the two looped copies */
+  font-size: 14px;
+  letter-spacing: 1.54px;
+  line-height: 16px;
+  color: #fff;
+}
+
+/* ON/OFF graphic line (not a progress bar): 16px OFF, 220px ON. */
+.line {
+  display: block;
+  width: 16px;
+  height: 1px;
+  background: #fff;
+  transition: width 460ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ---------- ON ---------- */
+.toggle[data-state="on"] .titleClip {
+  width: 188px;
+  opacity: 1;
+  transition-delay: 120ms; /* reveals just after the line starts extending */
+}
+.toggle[data-state="on"] .line {
+  width: 220px;
+}
+.toggle[data-state="on"] .marquee {
+  animation: marquee 12s linear infinite;
+  animation-delay: 420ms; /* starts only once the title is visible */
+}
+
+/* ---------- OFF ---------- */
+.toggle[data-state="off"] .titleClip {
+  width: 0;
+  opacity: 0; /* title fades out quickly first */
+}
+.toggle[data-state="off"] .line {
+  width: 16px;
+  transition-delay: 180ms; /* line retracts only after the title has faded */
+}
+
+/* Seamless: two identical copies; -50% shifts exactly one copy + seam. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle[data-state="on"] .marquee {
+    animation: none;
+  }
+}

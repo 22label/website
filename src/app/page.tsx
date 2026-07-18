@@ -1,4 +1,5 @@
 import Monogram from "@/components/Monogram";
+import MusicPlayer from "@/components/MusicPlayer";
 import styles from "./home.module.css";
 
 export default function Home() {
@@ -7,6 +8,9 @@ export default function Home() {
   return (
     <>
       <Monogram />
+
+      {/* Desktop-only Home music player (not mounted on mobile) */}
+      <MusicPlayer />
 
       {/* Mobile-only bottom information (not shown on the other mobile pages) */}
       <section className={styles.mobileInfo} aria-label="Studio information">
