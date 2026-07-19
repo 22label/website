@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { initAudioGraph, resumeAudio, setPlaying } from "@/effects/audioReactive";
 
 /**
  * Global, persistent audio for the whole site. Mounted once in the shared
@@ -38,22 +39,48 @@ export default function AudioProvider({
   children: React.ReactNode;
 }) {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [playing, setPlaying] = useState(false);
+  const [playing, setLocalPlaying] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     audio.volume = 0.6;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
+    const onPlay = () => {
+      setLocalPlaying(true);
+      setPlaying(true); // Sonic Pulse envelope in
+    };
+    const onPause = () => {
+      setLocalPlaying(false);
+      setPlaying(false); // Sonic Pulse envelope out
+    };
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
+
+    // The Web Audio graph (AudioContext + MediaElementSource + Analyser) can
+    // only be built after a real user gesture on Safari, and building it before
+    // the context can run would route playback through a suspended context and
+    // mute it. So build + resume it on the FIRST user gesture; it is a no-op if
+    // Sonic Pulse never runs. Self-removing + module-guarded (Strict Mode safe).
+    const onFirstGesture = () => {
+      initAudioGraph(audio);
+      resumeAudio();
+      window.removeEventListener("pointerdown", onFirstGesture);
+      window.removeEventListener("keydown", onFirstGesture);
+      window.removeEventListener("touchstart", onFirstGesture);
+    };
+    window.addEventListener("pointerdown", onFirstGesture, { passive: true });
+    window.addEventListener("keydown", onFirstGesture);
+    window.addEventListener("touchstart", onFirstGesture, { passive: true });
+
     // Attempt autoplay ON once at load. Real "play" event flips to ON; a
     // blocked autoplay is caught and we stay genuinely OFF (no fake ON).
-    audio.play().catch(() => setPlaying(false));
+    audio.play().catch(() => setLocalPlaying(false));
     return () => {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
+      window.removeEventListener("pointerdown", onFirstGesture);
+      window.removeEventListener("keydown", onFirstGesture);
+      window.removeEventListener("touchstart", onFirstGesture);
       audio.pause();
     };
   }, []);
@@ -61,8 +88,11 @@ export default function AudioProvider({
   const toggle = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    // A toggle is a valid gesture: make sure the analyser graph exists + runs.
+    initAudioGraph(audio);
+    resumeAudio();
     // Resume from the current timestamp (no reset); handle autoplay refusal.
-    if (audio.paused) audio.play().catch(() => setPlaying(false));
+    if (audio.paused) audio.play().catch(() => setLocalPlaying(false));
     else audio.pause();
   }, []);
 

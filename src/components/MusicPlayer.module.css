@@ -137,6 +137,21 @@
 }
 .toggle[data-state="on"] .line {
   width: var(--on-line);
+  /* Sonic Pulse micro-waveform: subtle bass-driven scaleX (<= ~1.8px on the
+     151px bar) + brightness. --pulse-bar is 0 when silent/OFF, so this is the
+     IDENTITY transform at rest — the approved look/width/thickness is unchanged.
+     transform/filter aren't transitioned, so they track the audio in real time
+     (the fade in/out lives in the --pulse-bar value itself). */
+  transform-origin: left center;
+  transform: scaleX(calc(1 + var(--pulse-bar, 0) * 0.012));
+  filter: brightness(calc(1 + var(--pulse-bar, 0) * 0.25));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle[data-state="on"] .line {
+    transform: none;
+    filter: none;
+  }
 }
 .toggle[data-state="on"] .marquee {
   animation: marquee 12s linear infinite;

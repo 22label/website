@@ -1,0 +1,63 @@
+/* Localhost debug overlay (?debugEffects=1). Never intercepts pointer/touch. */
+.panel {
+  position: fixed;
+  left: 8px;
+  top: 96px;
+  z-index: 9999;
+  pointer-events: none; /* container is inert */
+  width: 148px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #cfe0ff;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.2px;
+  user-select: none;
+}
+
+.title {
+  color: #8fb0ff;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  font-size: 9px;
+}
+
+.toggles {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.toggle {
+  pointer-events: auto; /* only the buttons are interactive */
+  flex: 1;
+  padding: 4px 2px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9aa7bd;
+  font: inherit;
+  font-size: 9px;
+  cursor: pointer;
+}
+.toggle.on {
+  border-color: #6ea0ff;
+  background: rgba(110, 160, 255, 0.22);
+  color: #dbe7ff;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+}
+.k {
+  color: #7f8ea6;
+}
+.v {
+  color: #e6eeff;
+}

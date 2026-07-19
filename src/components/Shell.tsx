@@ -4,6 +4,7 @@ import MobileNav from "@/components/MobileNav";
 import ReleasePreviewer from "@/components/ReleasePreviewer";
 import DesktopRail from "@/components/DesktopRail";
 import MobileBottom from "@/components/MobileBottom";
+import EffectsDebugPanel from "@/components/EffectsDebugPanel";
 import styles from "./Shell.module.css";
 
 /**
@@ -50,6 +51,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       {/* MOBILE — header + menu overlay (hidden on desktop) */}
       <MobileNav />
+
+      {/* LOCALHOST-ONLY — effects inspector, shown only with ?debugEffects=1 */}
+      <EffectsDebugPanel />
     </div>
   );
 }
