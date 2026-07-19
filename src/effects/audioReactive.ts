@@ -38,7 +38,9 @@ let decoding = false;
 let resumeOffset = 0; // musical offset (s) to (re)start from
 let srcStartCtxTime = 0; // ctx.currentTime when the current source started
 let srcStartOffset = 0; // offset the current source started at
-let wantPlay = false; // intent to play, pending decode / a valid gesture
+let wantPlay = false; // the app's desired state (should audio be playing?)
+let autoplayOnce = true; // one-shot autoplay attempt at load (after decode)
+let unlocked = false; // iOS Web Audio unlocked (silent buffer played in a gesture)
 const playListeners = new Set<(p: boolean) => void>();
 let playingTarget = false; // desired state (real playback)
 let env = 0; // 0..1 fade envelope (in on play, out on pause)
@@ -135,7 +137,25 @@ export function ensureAudio(): boolean {
         telemetry.loopStart = 0;
         telemetry.loopEnd = graph.loopDuration;
         telemetry.loopDuration = graph.loopDuration;
-        if (wantPlay) tryStart(); // autoplay was requested before decode finished
+        // One-shot autoplay: play ONLY if the browser allows audible autoplay
+        // without a gesture. resume() stays pending until the context can run;
+        // when it resolves, start only if NO user gesture unlocked it in the
+        // meantime (`unlocked`) — otherwise that resume was gesture-driven and
+        // playback must wait for the player toggle (no auto-start on a stray tap).
+        if (autoplayOnce) {
+          autoplayOnce = false;
+          graph.ctx
+            .resume()
+            .then(() => {
+              if (graph && graph.ctx.state === "running" && !unlocked) {
+                wantPlay = true;
+                reconcile();
+              }
+            })
+            .catch(() => {});
+        } else {
+          reconcile(); // a toggle before decode set the desired state
+        }
       })
       .catch(() => {
         decoding = false;
@@ -205,47 +225,72 @@ function stopSource(): void {
   notifyPlaying(false);
 }
 
-/** Try to actually start once decoded + the context can run (gesture). */
-function tryStart(): void {
-  if (!graph || !graph.buffer || graph.source) return;
-  graph.ctx
-    .resume()
-    .then(() => {
-      if (graph && graph.ctx.state === "running" && wantPlay) {
-        wantPlay = false;
-        startSource(resumeOffset);
+/** iOS Safari unlock: resume + start a 1-sample silent buffer SYNCHRONOUSLY in
+ *  the gesture. Once the context is running it stays running, so a later
+ *  (post-decode) real source start plays normally. */
+function unlock(): void {
+  if (!graph) return;
+  graph.ctx.resume().catch(() => {});
+  if (unlocked) return;
+  try {
+    const b = graph.ctx.createBuffer(1, 1, graph.ctx.sampleRate);
+    const s = graph.ctx.createBufferSource();
+    s.buffer = b;
+    s.connect(graph.ctx.destination);
+    s.start(0);
+    s.onended = () => {
+      try {
+        s.disconnect();
+      } catch {
+        /* ignore */
       }
-      telemetry.audioState = graph ? graph.ctx.state : "none";
-    })
-    .catch(() => {});
+    };
+    unlocked = true;
+  } catch {
+    /* ignore */
+  }
 }
 
-/** Resume the AudioContext on a valid user gesture (Safari) + honour intent. */
+/** Bring actual playback in line with the desired state `wantPlay` (starts or
+ *  stops the single source). Starting even while the context is still resuming
+ *  is fine — the buffered source plays as soon as the gesture-resume lands. */
+function reconcile(): void {
+  if (!graph || !graph.buffer) return;
+  if (wantPlay && !graph.source) startSource(resumeOffset);
+  else if (!wantPlay && graph.source) stopSource();
+}
+
+/** Resume the AudioContext on a valid user gesture (unlock for a later toggle).
+ *  Does NOT auto-start playback — that stays the player button's job, so a first
+ *  tap anywhere never surprises the user with music. MUST be called from within
+ *  a gesture handler. */
 export function userGesture(): void {
   ensureAudio();
   if (!graph) return;
-  if (graph.ctx.state === "suspended") graph.ctx.resume().catch(() => {});
-  if (wantPlay) tryStart();
+  unlock(); // resume + silent-buffer unlock, in-gesture (iOS)
   telemetry.audioState = graph.ctx.state;
 }
 
-/** Request playback (autoplay attempt or ON): starts if ready, else pends. */
+/** Mount autoplay intent (honoured once after decode; see ensureAudio). */
 export function requestPlay(): void {
   ensureAudio();
-  wantPlay = true;
-  tryStart();
 }
 
 /** Pause: stop the source, keep the position (no restart on resume). */
 export function pausePlayback(): void {
   wantPlay = false;
-  stopSource();
+  reconcile();
 }
 
-/** ON/OFF toggle used by the player control. */
+/** ON/OFF toggle used by the player control. Unlocks in-gesture, then flips the
+ *  desired state and reconciles (iOS-safe: the source starts in the gesture). */
 export function togglePlayback(): void {
-  if (isPlaying()) pausePlayback();
-  else requestPlay();
+  ensureAudio();
+  if (!graph) return;
+  autoplayOnce = false; // user is now in explicit control
+  unlock(); // gesture unlock (resume + silent buffer)
+  wantPlay = !isPlaying();
+  reconcile();
 }
 
 /** Exactly one audible source ever. */

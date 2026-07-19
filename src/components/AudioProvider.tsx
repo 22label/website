@@ -9,7 +9,6 @@ import {
 } from "react";
 import {
   ensureAudio,
-  requestPlay,
   subscribePlaying,
   togglePlayback,
   userGesture,
@@ -49,9 +48,10 @@ export default function AudioProvider({
     // Mirror the engine's real play state (never a fake ON).
     const unsub = subscribePlaying(setPlayingState);
 
-    // Build the graph + start decoding the loop, and attempt autoplay. If the
-    // browser blocks it, the context stays suspended and we start on the first
-    // gesture. Self-removing, module-guarded (Strict Mode safe).
+    // Build the graph + decode the loop; a one-shot autoplay runs after decode
+    // (honoured only if the browser allows audible autoplay). The first user
+    // gesture just UNLOCKS the context (iOS) so the player toggle is instant —
+    // it never auto-starts music on an unrelated tap. Self-removing, guarded.
     ensureAudio();
     const onFirstGesture = () => {
       userGesture();
@@ -62,7 +62,6 @@ export default function AudioProvider({
     window.addEventListener("pointerdown", onFirstGesture, { passive: true });
     window.addEventListener("keydown", onFirstGesture);
     window.addEventListener("touchstart", onFirstGesture, { passive: true });
-    requestPlay(); // autoplay intent (honoured now or on the first gesture)
 
     return () => {
       unsub();
@@ -73,8 +72,7 @@ export default function AudioProvider({
   }, []);
 
   const toggle = useCallback(() => {
-    userGesture(); // a toggle is a valid gesture (resume the context)
-    togglePlayback();
+    togglePlayback(); // unlocks the context in-gesture, then flips play/pause
   }, []);
 
   return (
