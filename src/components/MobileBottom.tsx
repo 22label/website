@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MusicPlayerControl from "./MusicPlayerControl";
 import AnimatedInfo from "./AnimatedInfo";
 import styles from "./MobileBottom.module.css";
@@ -17,6 +17,7 @@ import styles from "./MobileBottom.module.css";
  */
 export default function MobileBottom() {
   const [isMobile, setIsMobile] = useState(false);
+  const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -26,10 +27,38 @@ export default function MobileBottom() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
+  // Publish the real rendered height of this bottom section as a CSS custom
+  // property so the page content (e.g. Releases) can reserve exactly the space
+  // it occupies and never let the cover/icons slip behind it on short screens.
+  // Cleared when it unmounts / leaves mobile so desktop is unaffected.
+  useEffect(() => {
+    const el = sectionRef.current;
+    const root = document.documentElement;
+    if (!isMobile || !el) {
+      root.style.removeProperty("--mobile-bottom-height");
+      return;
+    }
+    const ro = new ResizeObserver(() => {
+      root.style.setProperty(
+        "--mobile-bottom-height",
+        `${Math.round(el.getBoundingClientRect().height)}px`,
+      );
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--mobile-bottom-height");
+    };
+  }, [isMobile]);
+
   if (!isMobile) return null;
 
   return (
-    <section className={styles.bottom} aria-label="Studio information">
+    <section
+      ref={sectionRef}
+      className={styles.bottom}
+      aria-label="Studio information"
+    >
       <MusicPlayerControl variant="mobile" />
       <AnimatedInfo variant="mobile" />
     </section>

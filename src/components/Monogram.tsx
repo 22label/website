@@ -66,6 +66,7 @@ const MARQUEE_FRAGMENT = /* glsl */ `
   uniform float uOffset;
   uniform float uGroupW;
   uniform float uBandH;
+  uniform vec3 uDarkStop; // heat-driven second stop: #000000 -> #580001
   void main() {
     vec2 p = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y); // y-down
     float ang = radians(152.689);
@@ -74,7 +75,7 @@ const MARQUEE_FRAGMENT = /* glsl */ `
     float halfLen = (abs(uResolution.x * dir.x) + abs(uResolution.y * dir.y)) * 0.5;
     float t = dot(p - center, dir) / (2.0 * halfLen) + 0.5;
     float u = clamp((t - 0.17843) / (0.8303 - 0.17843), 0.0, 1.0);
-    vec3 col = mix(vec3(44.0, 52.0, 62.0) / 255.0, vec3(0.0), u);
+    vec3 col = mix(vec3(44.0, 52.0, 62.0) / 255.0, uDarkStop, u);
     float bandTop = (uResolution.y - uBandH) * 0.5;
     if (p.y >= bandTop && p.y <= bandTop + uBandH) {
       float tx = fract((p.x + uOffset) / uGroupW);
@@ -177,6 +178,7 @@ export default function Monogram() {
           uOffset: { value: 0 },
           uGroupW: { value: 1 },
           uBandH: { value: MARQUEE_BAND_H * pr() },
+          uDarkStop: { value: new THREE.Vector3(0, 0, 0) },
         },
         vertexShader: MARQUEE_VERTEX,
         fragmentShader: MARQUEE_FRAGMENT,
@@ -522,6 +524,14 @@ export default function Monogram() {
       const COLD = new THREE.Color(HEAT_HEX_COLD);
       const HOT = new THREE.Color(HEAT_HEX_HOT);
       const heatColor = new THREE.Color(HEAT_HEX_COLD);
+      // Background heat — the gradient's dark (second) stop travels #000000 ->
+      // #580001 (rgb 88,0,1), driven by the SAME eased heat as the monogram. We
+      // update the marquee shader (the real Home background, covered by the
+      // WebGL canvas) and the CSS body gradient (used on other routes / the SVG
+      // fallback) from one place, so there is no second heat system.
+      const HEAT_DARK_R = 88;
+      const HEAT_DARK_B = 1;
+      const rootStyle = document.documentElement.style;
       const baseTint = profile.tintStrength;
       const baseBlur = profile.blur; // liquid-glass base; frost adds on top
       // RGB dispersion is split into a permanent baseline and a heat-driven
@@ -539,6 +549,12 @@ export default function Monogram() {
         appliedHeat = heat;
         const eased = smoothstep01(heat); // smooth colour + opacity
         heatColor.copy(COLD).lerpHSL(HOT, eased);
+        // Background dark stop tracks the same eased heat (#000 -> #580001).
+        const darkR = HEAT_DARK_R * eased;
+        const darkB = HEAT_DARK_B * eased;
+        marqueeMaterial.uniforms.uDarkStop.value.set(darkR / 255, 0, darkB / 255);
+        rootStyle.setProperty("--heat-r", `${Math.round(darkR)}`);
+        rootStyle.setProperty("--heat-b", `${Math.round(darkB)}`);
         // Frost ramps in only over BLUR_START..1, smoothly.
         const frost = smoothstep01(
           Math.min(1, Math.max(0, (heat - BLUR_START) / (1 - BLUR_START))),
@@ -881,6 +897,9 @@ export default function Monogram() {
 
       cleanup = () => {
         cancelAnimationFrame(rafId);
+        // Reset the background heat so routes without the monogram show base.
+        rootStyle.setProperty("--heat-r", "0");
+        rootStyle.setProperty("--heat-b", "0");
         for (const t of glitchTimers) clearTimeout(t);
         window.removeEventListener("wheel", onWheel);
         window.removeEventListener("resize", onResize);

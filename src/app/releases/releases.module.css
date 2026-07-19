@@ -146,34 +146,95 @@ a.platformBtn:active {
 
 /* ---------- MOBILE ---------- */
 @media (max-width: 767px) {
+  /* Real available-height layout: the content lives between the fixed mobile
+     header and the shared bottom section (never a rigid 812 coordinate, never a
+     page scroll, never a scale). `.content` is absolute inside the 100dvh Shell
+     viewport, bounded by top (header) and bottom (real bottom-section height),
+     so on short phones the cover + icons stay fully visible above the bottom. */
   .content {
+    /* Square cover, fluid in BOTH width and available height, capped at the
+       approved 228px; 375x812 (and every taller phone) keeps the reference 228.
+       Very short phones tighten further in the max-height override below so the
+       platform icons never slip behind the bottom section. */
+    --rel-cover: clamp(188px, min(62vw, 28.5dvh), 228px);
+    /* Vertical gaps ease down on shorter viewports; 24px at the 812 reference. */
+    --rel-gap: clamp(14px, 2.955dvh, 24px);
+
     left: 0;
-    top: calc(env(safe-area-inset-top) + 138px);
+    right: 0;
+    top: calc(env(safe-area-inset-top) + clamp(96px, 17dvh, 138px));
+    bottom: calc(
+      max(25px, env(safe-area-inset-bottom)) + var(--mobile-bottom-height, 96px) +
+        12px
+    );
     transform: none;
     width: 100%;
     max-width: none;
-    gap: 24px;
+    gap: var(--rel-gap);
     padding: 0 max(24px, env(safe-area-inset-left));
+    min-height: 0;
+    overflow: hidden;
   }
   .title {
     font-size: 32px;
+    flex: 0 0 auto;
   }
-  /* Carousel — one card centred; future cards snap-scroll horizontally. */
+  /* Rail fills the remaining height. One card is centred horizontally and
+     top-aligned (as in Figma); future releases snap-scroll horizontally. If a
+     very short viewport genuinely can't fit everything, ONLY this area scrolls
+     vertically — header and bottom section stay put and nothing is covered. */
   .rail {
+    flex: 1 1 auto;
+    min-height: 0;
     width: 100%;
     max-width: none;
+    align-items: flex-start;
+    justify-content: safe center;
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     scroll-snap-type: x mandatory;
-    overscroll-behavior-x: contain;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding-left: calc((100% - 228px) / 2);
-    padding-right: calc((100% - 228px) / 2);
+    padding: 0 0 8px;
   }
   .rail::-webkit-scrollbar {
     display: none;
   }
   .card {
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--rel-gap);
     scroll-snap-align: center;
+  }
+  /* Copy keeps its natural (nowrap) width; cover + icons follow --rel-cover. */
+  .copy {
+    width: auto;
+  }
+  .cover {
+    width: var(--rel-cover);
+    height: var(--rel-cover);
+  }
+  .platforms {
+    width: var(--rel-cover);
+  }
+}
+
+/* Very short phones (e.g. iPhone SE/8/15 at 667–720 tall, or any phone with the
+   Safari bars eating height): tighten the cover, the vertical gaps and the copy
+   spacing so the whole card — cover AND platform icons — stays fully visible
+   above the bottom section without a page scroll. Taller phones (812+) are
+   untouched and keep the approved 228px cover / 24px gaps. */
+@media (max-width: 767px) and (max-height: 720px) {
+  .content {
+    --rel-cover: clamp(168px, min(62vw, 26dvh), 228px);
+    --rel-gap: 14px;
+  }
+  .cardHeader {
+    gap: 10px;
+  }
+  .copy {
+    gap: 6px;
   }
 }
 

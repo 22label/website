@@ -11,11 +11,19 @@
      they render identically. Reference: the bottom-left info bar. */
   --bar-thickness: 1px;
 
-  /* Exact dark gradient exported from Figma */
+  /* Background heat — ONLY the dark (second) stop of the page gradient moves,
+     driven by the SAME normalized heatProgress as the 3D monogram (written by
+     the Monogram render loop). heat 0 => #000000, heat 1 => #580001 (88,0,1).
+     The first stop #2C343E stays fixed. */
+  --heat-r: 0;
+  --heat-g: 0;
+  --heat-b: 0;
+
+  /* Exact dark gradient exported from Figma (dark stop = heat-driven). */
   --page-gradient: linear-gradient(
     152.689deg,
     rgb(44, 52, 62) 17.843%,
-    rgb(0, 0, 0) 83.03%
+    rgb(var(--heat-r), var(--heat-g), var(--heat-b)) 83.03%
   );
 
   /* Global interface typography */
@@ -38,12 +46,17 @@
   --page-content-y: clamp(96px, 13.1148dvh, 220px);
   --page-content-max-width: calc(100vw - var(--page-content-x) - 64px);
 
-  /* Mobile background gradient angle (desktop keeps --page-gradient). */
+  /* Mobile background gradient angle (desktop keeps --page-gradient). Same
+     heat-driven dark stop. */
   --mobile-gradient: linear-gradient(
     116.8deg,
     rgb(44, 52, 62) 17.843%,
-    rgb(0, 0, 0) 83.03%
+    rgb(var(--heat-r), var(--heat-g), var(--heat-b)) 83.03%
   );
+
+  /* Real rendered height of the shared mobile bottom section — published by
+     MobileBottom at runtime; this is only the fallback used before it mounts. */
+  --mobile-bottom-height: 96px;
 }
 
 * {

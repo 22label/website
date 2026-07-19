@@ -32,10 +32,11 @@
   width: 448px;
   font-weight: 400;
   font-size: 22px;
-  letter-spacing: 2.42px;
+  letter-spacing: 1.1px;
   line-height: normal;
   color: var(--white);
   white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 
 .ghost {
