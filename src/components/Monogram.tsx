@@ -144,8 +144,10 @@ export default function Monogram() {
         alpha: true,
       });
       renderer.setClearColor(0x000000, 0);
-      // Mobile caps the pixel ratio for the extra refraction cost; desktop keeps 2.
-      const maxDpr = () => (window.innerWidth <= 767 ? 1.25 : 2);
+      // Mobile renders at 1.5× device pixels (crisp, but not the full native
+      // iPhone DPR of 3 which would be ~4× the fill). Desktop keeps 2. Raising
+      // this from the old 1.25 removes the soft/aliased look on iPhone.
+      const maxDpr = () => (window.innerWidth <= 767 ? 1.5 : 2);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDpr()));
       renderer.setSize(vw, vh, false);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -323,15 +325,17 @@ export default function Monogram() {
           tintStrength: 0.2,
           fresnel: 0.28,
           specular: 0.22,
-          rtDpr: 2, // min(pr(),2) === pr() on mobile -> RT unchanged
+          rtDpr: 2, // min(pr(),2) === pr() on mobile -> RT tracks the 1.5× canvas
+          // TWO stable, high-resolution tiers only (mobile downgrades HIGH ->
+          // BALANCED at most once — never to a low-res tier). Both keep the RT
+          // at/above the canvas resolution, so the refracted marquee never shows
+          // visible pixels and the RGB dispersion stays crisp. The old 0.8/0.68/
+          // 0.55 scales (at DPR 1.25) dropped the refraction target below CSS
+          // resolution — that was the grainy/pixelated regression on iPhone.
           tiers: {
-            high: { rtScale: 0.8, samples: 9, dispersion: 1 },
-            medium: { rtScale: 0.68, samples: 5, dispersion: 1 },
-            // Baseline RGB dispersion must survive the adaptive downgrade, so
-            // the cheapest tier KEEPS chromatic aberration (2 taps) — it only
-            // sheds blur taps. dispersion:0 here was what made the monogram go
-            // monochromatic a couple of seconds in on slower phones.
-            fallback: { rtScale: 0.55, samples: 3, dispersion: 1 },
+            high: { rtScale: 1.0, samples: 9, dispersion: 1 }, // HIGH: full effective res
+            medium: { rtScale: 0.85, samples: 7, dispersion: 1 }, // BALANCED: moderate, still > CSS res
+            fallback: { rtScale: 0.85, samples: 5, dispersion: 1 }, // mobile never selects this; kept for parity
           },
         },
         desktop: {
@@ -525,10 +529,12 @@ export default function Monogram() {
       const HOT = new THREE.Color(HEAT_HEX_HOT);
       const heatColor = new THREE.Color(HEAT_HEX_COLD);
       // Background heat — the gradient's dark (second) stop travels #000000 ->
-      // #580001 (rgb 88,0,1), driven by the SAME eased heat as the monogram. We
-      // update the marquee shader (the real Home background, covered by the
-      // WebGL canvas) and the CSS body gradient (used on other routes / the SVG
-      // fallback) from one place, so there is no second heat system.
+      // #580001 (rgb 88,0,1), driven by the SAME eased heat as the monogram. The
+      // visible Home background IS the WebGL marquee (it covers the body), so we
+      // heat ONLY its shader uniform — no per-frame CSS write, which used to
+      // repaint the full-screen fixed body gradient (a compositor cost behind
+      // the marquee) and allocate a string every heated frame. The CSS var is
+      // reset to base on cleanup so any non-WebGL route/fallback stays neutral.
       const HEAT_DARK_R = 88;
       const HEAT_DARK_B = 1;
       const rootStyle = document.documentElement.style;
@@ -549,12 +555,13 @@ export default function Monogram() {
         appliedHeat = heat;
         const eased = smoothstep01(heat); // smooth colour + opacity
         heatColor.copy(COLD).lerpHSL(HOT, eased);
-        // Background dark stop tracks the same eased heat (#000 -> #580001).
-        const darkR = HEAT_DARK_R * eased;
-        const darkB = HEAT_DARK_B * eased;
-        marqueeMaterial.uniforms.uDarkStop.value.set(darkR / 255, 0, darkB / 255);
-        rootStyle.setProperty("--heat-r", `${Math.round(darkR)}`);
-        rootStyle.setProperty("--heat-b", `${Math.round(darkB)}`);
+        // Background dark stop tracks the same eased heat (#000 -> #580001) via
+        // the marquee shader uniform only (no allocation, no CSS repaint).
+        marqueeMaterial.uniforms.uDarkStop.value.set(
+          (HEAT_DARK_R * eased) / 255,
+          0,
+          (HEAT_DARK_B * eased) / 255,
+        );
         // Frost ramps in only over BLUR_START..1, smoothly.
         const frost = smoothstep01(
           Math.min(1, Math.max(0, (heat - BLUR_START) / (1 - BLUR_START))),
@@ -750,8 +757,16 @@ export default function Monogram() {
           if (perfFrames >= 80) {
             const avg = perfAccum / perfFrames;
             tierLocked = true;
-            if (avg > 26) applyGlassTier("fallback");
-            else if (avg > 20 && currentTier === "high") applyGlassTier("medium");
+            if (isMobile) {
+              // Mobile: at most ONE stable step, HIGH -> BALANCED. Never a
+              // low-res fallback, and it locks (tierLocked) so it cannot
+              // oscillate. Both tiers keep the refraction crisp.
+              if (avg > 24 && currentTier === "high") applyGlassTier("medium");
+            } else {
+              // Desktop behaviour is unchanged.
+              if (avg > 26) applyGlassTier("fallback");
+              else if (avg > 20 && currentTier === "high") applyGlassTier("medium");
+            }
           }
         }
 
@@ -862,6 +877,21 @@ export default function Monogram() {
         applyFit();
       };
       window.addEventListener("resize", onResize);
+      // Orientation changes and Safari's dynamic viewport (URL/tool bars showing
+      // or hiding) change the usable height without always firing a window
+      // "resize"; listen to those too so the canvas + refraction render target
+      // are re-sized to the real viewport. Coalesced to one update per frame so
+      // an animating bar can't thrash the render-target reallocation.
+      let resizeRaf = 0;
+      const onResizeCoalesced = () => {
+        if (resizeRaf) return;
+        resizeRaf = requestAnimationFrame(() => {
+          resizeRaf = 0;
+          onResize();
+        });
+      };
+      window.addEventListener("orientationchange", onResizeCoalesced);
+      window.visualViewport?.addEventListener("resize", onResizeCoalesced);
 
       // --- Pause the loop when the tab is hidden; resume when visible --------
       let paused = false;
@@ -900,9 +930,12 @@ export default function Monogram() {
         // Reset the background heat so routes without the monogram show base.
         rootStyle.setProperty("--heat-r", "0");
         rootStyle.setProperty("--heat-b", "0");
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
         for (const t of glitchTimers) clearTimeout(t);
         window.removeEventListener("wheel", onWheel);
         window.removeEventListener("resize", onResize);
+        window.removeEventListener("orientationchange", onResizeCoalesced);
+        window.visualViewport?.removeEventListener("resize", onResizeCoalesced);
         document.removeEventListener("visibilitychange", onVisibility);
         canvas.removeEventListener("webglcontextlost", onContextLost);
         canvas.removeEventListener("webglcontextrestored", onContextRestored);
