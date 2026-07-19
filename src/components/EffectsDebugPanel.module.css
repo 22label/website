@@ -5,7 +5,9 @@
   top: 96px;
   z-index: 9999;
   pointer-events: none; /* container is inert */
-  width: 148px;
+  width: 166px;
+  max-height: calc(100dvh - 112px);
+  overflow-y: auto;
   padding: 8px 10px;
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.62);
@@ -17,6 +19,15 @@
   line-height: 1.5;
   letter-spacing: 0.2px;
   user-select: none;
+}
+
+.section {
+  margin: 7px 0 3px;
+  color: #8fb0ff;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  opacity: 0.85;
 }
 
 .title {

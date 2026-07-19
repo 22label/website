@@ -39,23 +39,48 @@ export const FIELD = {
 
 // ------------------------------------------------------------------- SONIC PULSE
 export const PULSE = {
-  fftSizeDesktop: 512,
-  fftSizeMobile: 256,
-  smoothing: 0.85, // AnalyserNode.smoothingTimeConstant
-  bassGain: 1.0,
-  midGain: 1.0,
-  highGain: 1.0,
-  noiseGate: 0.06, // normalized level below which a band reads 0 (kills silence jitter)
-  attackRate: 18, // per-second exp rise (fast)
-  releaseRate: 4, // per-second exp fall (soft)
+  // Runtime master gain for the whole Sonic Pulse — the ?debugEffects panel
+  // switches it between OFF(0) / 1x / 2.5x / 4x. Preview default is 2.5x so the
+  // audio reaction is clearly visible. It scales ONLY the audio scene offsets
+  // (never heat / Frequency Field / base refraction).
+  sonicIntensity: 2.5,
+
+  fftSizeDesktop: 1024,
+  fftSizeMobile: 512,
+  smoothing: 0.8, // AnalyserNode.smoothingTimeConstant (its own light smoothing)
+
+  // Dynamics — fast attack, soft release, both frame-rate independent.
+  attackRate: 14, // per-second exp rise (~70ms)
+  releaseRate: 2.5, // per-second exp fall (~400ms)
+  noiseGate: 0.04, // normalized floor below which a band reads 0 (lowered)
+  perceptualExp: 0.75, // pow(value, exp) so mid levels stay visible
+  // Adaptive per-band normalization to the track's real level (auto-levels a
+  // quiet vs loud master). A slowly-decaying running peak divides each band.
+  peakDecay: 0.9992, // per-frame decay of the running peak (slow)
+  peakFloor: 0.1, // minimum peak, so silence/noise isn't amplified to full
+
   fadeInMs: 500, // 400–600ms envelope in when playback really starts
   fadeOutMs: 650, // 500–800ms envelope out on pause/OFF
-  // Scene modulations (all additive, tiny)
-  bgPulseMax: 0.03, // 3% background brightness
-  refractionPulseMax: 0.03, // 3% refraction breath
-  monogramScaleMax: 0.012, // uniform scale up to +1.2% (within 1.005–1.015)
-  playerBarPulseMax: 1.0, // drives the --pulse-bar CSS var 0..1 (CSS maps to look)
+
+  // Per-effect 1x base gain and a hard visible clamp (the ceiling at any
+  // intensity). offset = min(clamp, band * base * sonicIntensity).
+  bgPulseBase: 0.03,
+  bgPulseClamp: 0.08, // background brightness up to 8%
+  refractPulseBase: 0.038,
+  refractPulseClamp: 0.1, // refraction breath up to 10%
+  scalePulseBase: 0.013,
+  scalePulseClamp: 0.035, // monogram mass up to +3.5% (1.035)
+  specPulseBase: 0.04,
+  specPulseClamp: 0.12, // mid-driven specular up to +12%
+  depthBase: 10, // world-unit z "mass" push (ortho camera -> subtle)
+  depthClamp: 26,
+  barGain: 1.0, // multiplier for the --pulse-bar CSS value (0..1)
 };
+
+/** Runtime setter for the debug panel's Sonic-intensity control. */
+export function setSonicIntensity(v: number): void {
+  PULSE.sonicIntensity = v;
+}
 
 // ------------------------------------------------------- GLOBAL SAFETY CLAMPS (§3)
 // finalValue = base + heatOffset + fieldOffset + audioOffset, hard-capped here so
@@ -76,9 +101,22 @@ export const CLAMP = {
  */
 export const telemetry = {
   fieldStrength: 0,
+  // smoothed (post curve/normalize/env) bands — these drive the visuals
   bass: 0,
   mid: 0,
   high: 0,
+  // raw (0..1 straight off the analyser) and normalized (adaptive) bands
+  rawBass: 0,
+  rawMid: 0,
+  rawHigh: 0,
+  normBass: 0,
+  normMid: 0,
+  normHigh: 0,
+  pulseStrength: 0, // final overall Sonic Pulse strength (0..1, incl. env)
+  bgOffset: 0, // applied background brightness offset
+  refractOffset: 0, // applied refraction breath offset
+  monoScale: 1, // applied final monogram scale multiplier
+  sonicIntensity: 2.5,
   heat: 0,
   dpr: 0,
   fps: 0,

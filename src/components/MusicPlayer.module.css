@@ -143,8 +143,8 @@
      transform/filter aren't transitioned, so they track the audio in real time
      (the fade in/out lives in the --pulse-bar value itself). */
   transform-origin: left center;
-  transform: scaleX(calc(1 + var(--pulse-bar, 0) * 0.012));
-  filter: brightness(calc(1 + var(--pulse-bar, 0) * 0.25));
+  transform: scaleX(calc(1 + var(--pulse-bar, 0) * 0.027));
+  filter: brightness(calc(1 + var(--pulse-bar, 0) * 0.4));
 }
 
 @media (prefers-reduced-motion: reduce) {

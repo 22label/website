@@ -441,6 +441,7 @@ export default function Monogram() {
         uniform float uFieldRefract;  // local refraction/dispersion boost
         uniform float uFieldSpec;     // local specular boost
         uniform float uAudioRefract;  // global refraction breath from bass/mid
+        uniform float uAudioSpec;     // global specular lift from mids
         varying vec2 vScreenUV;
         varying vec3 vViewNormal;
         varying vec3 vLocalPos;
@@ -506,7 +507,7 @@ export default function Monogram() {
           vec3 L = normalize(uLightDirection);
           vec3 H = normalize(L + V);
           float spec = pow(max(dot(N, H), 0.0), 48.0) * uSpecularStrength
-            * (1.0 + inflG * uFieldSpec);
+            * (1.0 + inflG * uFieldSpec + uAudioSpec);
           col += spec * vec3(1.0);
 
           gl_FragColor = vec4(col, 1.0);
@@ -555,6 +556,7 @@ export default function Monogram() {
             uFieldRefract: { value: 0 },
             uFieldSpec: { value: 0 },
             uAudioRefract: { value: 0 },
+            uAudioSpec: { value: 0 },
             uQualityTier: { value: glassTierOrder.indexOf(tier) },
           },
           vertexShader: GLASS_VERTEX,
@@ -867,19 +869,30 @@ export default function Monogram() {
           fieldStrength *
           (isMobile ? FIELD.mobileStrength : FIELD.desktopStrength);
 
-        // --- Compose additive offsets with global clamps (§3) -----------------
-        // finalValue = base + heatOffset + fieldOffset + audioOffset
+        // --- Compose additive offsets (§3) ------------------------------------
+        // finalValue = base + heatOffset + fieldOffset + audioOffset.
+        // Audio offsets scale by the runtime intensity (OFF/1x/2.5x/4x) and are
+        // hard-clamped per effect; 0 when the pulse is off / paused (bands -> 0).
+        const si = pulseOn ? PULSE.sonicIntensity : 0;
         const audioRefract = Math.min(
-          CLAMP.refractionOffset,
-          (bands.bass * 0.5 + bands.mid * 0.5) * PULSE.refractionPulseMax,
+          PULSE.refractPulseClamp,
+          (bands.bass * 0.5 + bands.mid * 0.5) * PULSE.refractPulseBase * si,
         );
         const audioBg = Math.min(
-          CLAMP.bgBrightness,
-          bands.bass * PULSE.bgPulseMax,
+          PULSE.bgPulseClamp,
+          bands.bass * PULSE.bgPulseBase * si,
         );
         const audioScale = Math.min(
-          CLAMP.monogramScale,
-          bands.bass * PULSE.monogramScaleMax,
+          PULSE.scalePulseClamp,
+          bands.bass * PULSE.scalePulseBase * si,
+        );
+        const audioSpec = Math.min(
+          PULSE.specPulseClamp,
+          bands.mid * PULSE.specPulseBase * si,
+        );
+        const audioDepth = Math.min(
+          PULSE.depthClamp,
+          bands.bass * PULSE.depthBase * si,
         );
 
         // Monogram: scroll rotation (authoritative) + tiny field parallax.
@@ -895,6 +908,7 @@ export default function Monogram() {
         mesh.rotation.y = scrollRotY + parYaw;
         mesh.rotation.x = parPitch;
         mesh.scale.setScalar(baseScaleValue * (1 + audioScale));
+        mesh.position.z = audioDepth; // bass "mass" push (ortho -> subtle)
 
         // Marquee uniforms (Frequency Field distortion + glow + audio bg pulse).
         {
@@ -923,11 +937,15 @@ export default function Monogram() {
           gu.uFieldRefract.value = FIELD.refractionBoostMax;
           gu.uFieldSpec.value = FIELD.specularBoostMax;
           gu.uAudioRefract.value = audioRefract;
+          gu.uAudioSpec.value = audioSpec;
         }
 
         // Debug telemetry (read by the ?debugEffects=1 panel; not visual).
         fpsSmooth = fpsSmooth * 0.92 + (dtSec > 0 ? 1 / dtSec : 60) * 0.08;
         telemetry.fieldStrength = sEff;
+        telemetry.bgOffset = audioBg;
+        telemetry.refractOffset = audioRefract;
+        telemetry.monoScale = 1 + audioScale;
         telemetry.heat = heat;
         telemetry.dpr = pr();
         telemetry.fps = fpsSmooth;

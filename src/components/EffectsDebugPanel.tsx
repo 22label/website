@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EFFECTS, telemetry } from "@/effects/effectsConfig";
+import {
+  EFFECTS,
+  PULSE,
+  setSonicIntensity,
+  telemetry,
+} from "@/effects/effectsConfig";
 import styles from "./EffectsDebugPanel.module.css";
 
 /**
@@ -41,6 +46,18 @@ export default function EffectsDebugPanel() {
     EFFECTS[key] = !EFFECTS[key];
     force((n) => n + 1);
   };
+  const setIntensity = (v: number) => {
+    setSonicIntensity(v);
+    force((n) => n + 1);
+  };
+  const trio = (label: string, a: number, b: number, c: number) => (
+    <div className={styles.row}>
+      <span className={styles.k}>{label}</span>
+      <span className={styles.v}>
+        {pct(a)} {pct(b)} {pct(c)}
+      </span>
+    </div>
+  );
 
   return (
     <div className={styles.panel} aria-hidden="true">
@@ -61,10 +78,37 @@ export default function EffectsDebugPanel() {
           PULSE {EFFECTS.ENABLE_SONIC_PULSE ? "ON" : "OFF"}
         </button>
       </div>
+
+      <div className={styles.section}>sonic intensity</div>
+      <div className={styles.toggles}>
+        {[
+          ["OFF", 0],
+          ["1×", 1],
+          ["2.5×", 2.5],
+          ["4×", 4],
+        ].map(([label, v]) => (
+          <button
+            key={label}
+            type="button"
+            className={`${styles.toggle} ${PULSE.sonicIntensity === v ? styles.on : ""}`}
+            onClick={() => setIntensity(v as number)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.section}>audio (bass / mid / high)</div>
+      {trio("raw", t.rawBass, t.rawMid, t.rawHigh)}
+      {trio("norm", t.normBass, t.normMid, t.normHigh)}
+      {trio("smooth", t.bass, t.mid, t.high)}
+      {row("pulse", pct(t.pulseStrength))}
+      {row("bg off", pct(t.bgOffset))}
+      {row("refr off", pct(t.refractOffset))}
+      {row("mono scale", t.monoScale.toFixed(3))}
+
+      <div className={styles.section}>state</div>
       {row("field", pct(t.fieldStrength))}
-      {row("bass", pct(t.bass))}
-      {row("mid", pct(t.mid))}
-      {row("high", pct(t.high))}
       {row("heat", pct(t.heat))}
       {row("dpr", t.dpr.toFixed(2))}
       {row("fps", Math.round(t.fps).toString())}

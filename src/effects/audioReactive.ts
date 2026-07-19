@@ -26,7 +26,8 @@ type Graph = {
 let graph: Graph | null = null;
 let playingTarget = false; // desired state (real playback)
 let env = 0; // 0..1 fade envelope (in on play, out on pause)
-const bands = { bass: 0, mid: 0, high: 0 }; // smoothed, pre-envelope
+const bands = { bass: 0, mid: 0, high: 0 }; // smoothed (curved/normalized), pre-envelope
+const peaks = { bass: PULSE.peakFloor, mid: PULSE.peakFloor, high: PULSE.peakFloor };
 let externalDriver = false; // true while the Monogram loop drives tick()
 let internalRaf = 0;
 let internalLast = 0;
@@ -112,22 +113,39 @@ function avgRange(a: Uint8Array<ArrayBuffer>, from: number, to: number): number 
   return hi > lo ? s / (hi - lo) / 255 : 0;
 }
 
-function gate(v: number, gain: number): number {
-  const g = v * gain;
-  return g < PULSE.noiseGate ? 0 : (g - PULSE.noiseGate) / (1 - PULSE.noiseGate);
-}
-
 function smoothTo(cur: number, target: number, dt: number): number {
   const rate = target > cur ? PULSE.attackRate : PULSE.releaseRate;
   return cur + (target - cur) * (1 - Math.exp(-rate * dt));
 }
 
+/**
+ * raw (0..1) -> adaptive-normalized (divided by a slow running peak so quiet and
+ * loud masters both fill the range) -> noise-gated -> perceptual curve. Returns
+ * [normalized, curved]; also advances the per-band peak.
+ */
+function shape(raw: number, band: "bass" | "mid" | "high"): [number, number] {
+  peaks[band] = Math.max(raw, peaks[band] * PULSE.peakDecay);
+  if (peaks[band] < PULSE.peakFloor) peaks[band] = PULSE.peakFloor;
+  const norm = Math.min(1, raw / peaks[band]);
+  const gated =
+    norm < PULSE.noiseGate ? 0 : (norm - PULSE.noiseGate) / (1 - PULSE.noiseGate);
+  return [norm, Math.pow(gated, PULSE.perceptualExp)];
+}
+
 function writeOut(): void {
-  const bar = Math.min(1, (bands.bass * 0.65 + bands.mid * 0.35) * env);
+  // Player-bar micro-waveform level, scaled by the runtime intensity (relative
+  // to the 2.5x preview default) so OFF/1x/2.5x/4x visibly change the bar too.
+  const level = bands.bass * 0.65 + bands.mid * 0.35;
+  const bar = Math.min(
+    1,
+    level * env * (PULSE.sonicIntensity / 2.5) * PULSE.barGain,
+  );
   document.documentElement.style.setProperty("--pulse-bar", bar.toFixed(3));
   telemetry.bass = bands.bass * env;
   telemetry.mid = bands.mid * env;
   telemetry.high = bands.high * env;
+  telemetry.pulseStrength = level * env;
+  telemetry.sonicIntensity = PULSE.sonicIntensity;
   telemetry.audioState = graph ? graph.ctx.state : "none";
 }
 
@@ -136,6 +154,9 @@ function zeroOut(): void {
   env = 0;
   document.documentElement.style.setProperty("--pulse-bar", "0");
   telemetry.bass = telemetry.mid = telemetry.high = 0;
+  telemetry.rawBass = telemetry.rawMid = telemetry.rawHigh = 0;
+  telemetry.normBass = telemetry.normMid = telemetry.normHigh = 0;
+  telemetry.pulseStrength = 0;
 }
 
 /**
@@ -157,12 +178,21 @@ export function tick(dtSec: number): void {
 
   if (graph && graph.ctx.state === "running") {
     graph.analyser.getByteFrequencyData(graph.freq);
-    const bass = gate(avgRange(graph.freq, 0, 0.08), PULSE.bassGain);
-    const mid = gate(avgRange(graph.freq, 0.08, 0.35), PULSE.midGain);
-    const high = gate(avgRange(graph.freq, 0.35, 0.8), PULSE.highGain);
-    bands.bass = smoothTo(bands.bass, bass, dt);
-    bands.mid = smoothTo(bands.mid, mid, dt);
-    bands.high = smoothTo(bands.high, high, dt);
+    const rawBass = avgRange(graph.freq, 0, 0.08);
+    const rawMid = avgRange(graph.freq, 0.08, 0.35);
+    const rawHigh = avgRange(graph.freq, 0.35, 0.8);
+    const [nBass, cBass] = shape(rawBass, "bass");
+    const [nMid, cMid] = shape(rawMid, "mid");
+    const [nHigh, cHigh] = shape(rawHigh, "high");
+    bands.bass = smoothTo(bands.bass, cBass, dt);
+    bands.mid = smoothTo(bands.mid, cMid, dt);
+    bands.high = smoothTo(bands.high, cHigh, dt);
+    telemetry.rawBass = rawBass;
+    telemetry.rawMid = rawMid;
+    telemetry.rawHigh = rawHigh;
+    telemetry.normBass = nBass;
+    telemetry.normMid = nMid;
+    telemetry.normHigh = nHigh;
   } else {
     bands.bass = smoothTo(bands.bass, 0, dt);
     bands.mid = smoothTo(bands.mid, 0, dt);
