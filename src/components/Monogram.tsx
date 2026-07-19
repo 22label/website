@@ -325,7 +325,11 @@ export default function Monogram() {
           tiers: {
             high: { rtScale: 0.8, samples: 9, dispersion: 1 },
             medium: { rtScale: 0.68, samples: 5, dispersion: 1 },
-            fallback: { rtScale: 0.55, samples: 3, dispersion: 0 },
+            // Baseline RGB dispersion must survive the adaptive downgrade, so
+            // the cheapest tier KEEPS chromatic aberration (2 taps) — it only
+            // sheds blur taps. dispersion:0 here was what made the monogram go
+            // monochromatic a couple of seconds in on slower phones.
+            fallback: { rtScale: 0.55, samples: 3, dispersion: 1 },
           },
         },
         desktop: {
@@ -339,7 +343,8 @@ export default function Monogram() {
           tiers: {
             high: { rtScale: 0.9, samples: 9, dispersion: 1 },
             medium: { rtScale: 0.8, samples: 7, dispersion: 1 },
-            fallback: { rtScale: 0.65, samples: 5, dispersion: 0 },
+            // Keep the baseline RGB dispersion on the cheapest desktop tier too.
+            fallback: { rtScale: 0.65, samples: 5, dispersion: 1 },
           },
         },
       } as const;
@@ -362,6 +367,13 @@ export default function Monogram() {
           gl_Position = clip;
         }`;
 
+      // The blur accumulates a base tap (+4 at samples>=5, +4 more at >=9), so
+      // the average must divide by the REAL tap count, not the tier's `samples`
+      // label. With samples=3 only the base tap exists; dividing by 3 dimmed the
+      // fallback to a third of its brightness (a flat, washed-out look on top of
+      // the missing dispersion). Divide by taps so every tier is correctly lit.
+      const tapCount = (samples: number) =>
+        samples >= 9 ? 9 : samples >= 5 ? 5 : 1;
       const glassFragment = (samples: number, dispersion: number) => /* glsl */ `
         precision highp float;
         uniform sampler2D tBackground;
@@ -414,7 +426,7 @@ export default function Monogram() {
           col += texture2D(tBackground, uv + vec2(-b, b) * 0.7071).rgb;`
               : ``
           }
-          col /= ${samples.toFixed(1)};
+          col /= ${tapCount(samples).toFixed(1)};
 
           ${
             dispersion
@@ -512,6 +524,13 @@ export default function Monogram() {
       const heatColor = new THREE.Color(HEAT_HEX_COLD);
       const baseTint = profile.tintStrength;
       const baseBlur = profile.blur; // liquid-glass base; frost adds on top
+      // RGB dispersion is split into a permanent baseline and a heat-driven
+      // boost:  finalChroma = baseChroma + eased * CHROMA_BOOST.  The baseline is
+      // never touched by heat/cool/scroll/glitch, so the liquid-glass colour
+      // separation is always present; cooling only unwinds the boost back DOWN
+      // to the baseline (never to zero).
+      const baseChroma = profile.chroma; // permanent floor, > 0
+      const CHROMA_BOOST = profile.chroma * 1.5; // extra separation at full heat
       let heat = 0; // 0..1 linear thermal level
       let appliedHeat = -1; // last heat written to the material (skips redundant work)
       const smoothstep01 = (x: number) => x * x * (3 - 2 * x);
@@ -530,6 +549,10 @@ export default function Monogram() {
           glassShader.uniforms.uTintStrength.value = baseTint * (1 + eased);
           // Blur ONLY the monogram's own optical content (its refraction taps).
           glassShader.uniforms.uBlurStrength.value = baseBlur + frost * BLUR_MAX_ADD;
+          // Dynamic RGB boost rides on top of the always-on baseline; when heat
+          // decays the boost unwinds to baseChroma, so the separation persists.
+          glassShader.uniforms.uChromaticAberration.value =
+            baseChroma + eased * CHROMA_BOOST;
         } else if (!useCustomGlass) {
           const m = meshMaterial as import("three").MeshPhysicalMaterial;
           m.color.copy(heatColor);
