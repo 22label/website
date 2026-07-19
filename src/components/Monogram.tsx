@@ -1045,28 +1045,27 @@ export default function Monogram() {
           (isMobile ? FIELD.mobileStrength : FIELD.desktopStrength);
 
         // --- Compose additive offsets (§3) ------------------------------------
-        // finalValue = base + heatOffset + fieldOffset + audioOffset.
-        // Audio offsets scale by the runtime intensity (OFF/1x/2.5x/4x) and are
-        // hard-clamped per effect; 0 when the pulse is off / paused (bands -> 0).
-        const si = pulseOn ? PULSE.sonicIntensity : 0;
+        // finalValue = base + heatOffset + fieldOffset + audioOffset. Audio
+        // offsets scale by the per-breakpoint runtime intensity (desktop 2.5x /
+        // mobile 1.75x) and are hard-clamped per effect (lower ceilings on
+        // mobile); 0 when the pulse is off / paused (bands -> 0).
+        const bp = isMobile ? PULSE.mobile : PULSE.desktop;
+        const si = pulseOn ? bp.intensity : 0;
         const audioRefract = Math.min(
-          PULSE.refractPulseClamp,
+          bp.refractClamp,
           (bands.bass * 0.5 + bands.mid * 0.5) * PULSE.refractPulseBase * si,
         );
-        const audioBg = Math.min(
-          PULSE.bgPulseClamp,
-          bands.bass * PULSE.bgPulseBase * si,
-        );
+        const audioBg = Math.min(bp.bgClamp, bands.bass * PULSE.bgPulseBase * si);
         const audioScale = Math.min(
-          PULSE.scalePulseClamp,
+          bp.scaleClamp,
           bands.bass * PULSE.scalePulseBase * si,
         );
         const audioSpec = Math.min(
-          PULSE.specPulseClamp,
+          bp.specClamp,
           bands.mid * PULSE.specPulseBase * si,
         );
         const audioDepth = Math.min(
-          PULSE.depthClamp,
+          bp.depthClamp,
           bands.bass * PULSE.depthBase * si,
         );
 
@@ -1082,7 +1081,11 @@ export default function Monogram() {
         );
         mesh.rotation.y = scrollRotY + parYaw;
         mesh.rotation.x = parPitch;
-        mesh.scale.setScalar(baseScaleValue * (1 + audioScale));
+        // During a tactile hold, ease the Sonic-Pulse SCALE contribution down a
+        // little so the summed monogram scale stays safe (audio analysis + the
+        // heatmap are NOT reduced). pressStrength is last frame's value.
+        const scalePulse = audioScale * (1 - 0.4 * pressStrength);
+        mesh.scale.setScalar(baseScaleValue * (1 + scalePulse));
         mesh.position.z = audioDepth; // bass "mass" push (ortho -> subtle)
 
         // Marquee uniforms (Frequency Field distortion + glow + audio bg pulse).

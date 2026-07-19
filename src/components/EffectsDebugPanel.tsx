@@ -10,6 +10,7 @@ import {
   setHeatmapMaxHeight,
   setHeatmapOpacity,
   setHeatmapSmoothing,
+  setMobileSonicIntensity,
   setSonicIntensity,
   setTactileHoldMs,
   setTactilePressureIntensity,
@@ -69,7 +70,10 @@ export default function EffectsDebugPanel() {
     fn(v);
     force((n) => n + 1);
   };
+  const isMobileVp =
+    typeof window !== "undefined" && window.innerWidth <= 767;
   const setIntensity = pick(setSonicIntensity);
+  const setMobileIntensity = pick(setMobileSonicIntensity);
   const setHmInt = pick(setHeatmapIntensity);
   const setHmH = pick(setHeatmapMaxHeight);
   const setHmSmooth = pick(setHeatmapSmoothing);
@@ -124,24 +128,39 @@ export default function EffectsDebugPanel() {
         </button>
       </div>
 
-      <div className={styles.section}>sonic intensity</div>
-      <div className={styles.toggles}>
-        {[
-          ["OFF", 0],
-          ["1×", 1],
-          ["2.5×", 2.5],
-          ["4×", 4],
-        ].map(([label, v]) => (
-          <button
-            key={label}
-            type="button"
-            className={`${styles.toggle} ${PULSE.sonicIntensity === v ? styles.on : ""}`}
-            onClick={() => setIntensity(v as number)}
-          >
-            {label}
-          </button>
-        ))}
+      <div className={styles.section}>
+        sonic intensity ({isMobileVp ? "mobile" : "desktop"})
       </div>
+      {isMobileVp
+        ? seg(
+            PULSE.mobile.intensity,
+            [
+              ["OFF", 0],
+              ["0.5×", 0.5],
+              ["1×", 1],
+              ["1.75×", 1.75],
+              ["2.5×", 2.5],
+            ],
+            setMobileIntensity,
+          )
+        : seg(
+            PULSE.desktop.intensity,
+            [
+              ["OFF", 0],
+              ["1×", 1],
+              ["2.5×", 2.5],
+              ["4×", 4],
+            ],
+            setIntensity,
+          )}
+      {row("playback", telemetry.audioSourceCount ? "gapless buffer" : "idle")}
+      {row("ctx", telemetry.audioState)}
+      {row("src count", telemetry.audioSourceCount.toString())}
+      {row("offset", `${telemetry.audioOffset.toFixed(2)}s`)}
+      {row(
+        "loop",
+        `${telemetry.loopStart.toFixed(2)}–${telemetry.loopEnd.toFixed(2)}s`,
+      )}
 
       <div className={styles.toggles}>
         <button

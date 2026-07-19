@@ -45,3 +45,4 @@ next-env.d.ts
 
 # stray temporary screenshot (accidentally saved in root)
 /menu8604.png
+public/audio/intruder-snippet.original.mp3

@@ -1,29 +1,45 @@
 /**
- * Sonic Pulse audio engine — ONE AudioContext, ONE MediaElementSource, ONE
- * AnalyserNode for the whole app, attached to the single persistent <audio>
- * element. It exposes smoothed bass/mid/high bands (attack/release + noise gate
- * + a play/pause fade envelope) that the WebGL scene reads, and it writes a
- * `--pulse-bar` CSS custom property for the player bar micro-waveform.
+ * Sonic Pulse audio engine + gapless player — ONE AudioContext, ONE GainNode
+ * (fixed 0.6), ONE AnalyserNode for the whole app. Playback is sample-accurate:
+ * the MP3 is fetched + decodeAudioData'd ONCE into an AudioBuffer, a ~12ms
+ * head-tail crossfade is baked in (once, not per-cycle) so the loop is seamless,
+ * and it is played through an AudioBufferSourceNode with `loop=true`. The HTML
+ * <audio loop> mechanism (not sample-accurate, gap on Safari/iOS) is gone.
  *
- * Only ONE requestAnimationFrame ever runs: while the Monogram is mounted it
- * "claims the driver" and calls tick() from its own loop; otherwise this module
- * runs a tiny internal rAF (only while audio is playing / fading) purely to keep
- * the player bar alive on routes without the WebGL scene.
+ * Chain: AudioBufferSourceNode -> GainNode(0.6) -> AnalyserNode -> destination.
+ * The analyser (after the gain) feeds bass/mid/high (attack/release + gate + a
+ * play/pause fade envelope) to the WebGL scene, and writes `--pulse-bar`.
  *
- * createMediaElementSource() may be called only once per element, so the graph
- * is a module-level singleton guarded against React Strict Mode double-mounts.
+ * Pause/resume keeps the musical position: an AudioBufferSourceNode can only be
+ * started once, so pause stops it (short fade, no click) and stores the current
+ * loop offset from the AudioContext clock; resume creates a fresh source and
+ * starts exactly at that offset. Route changes never touch playback. Only ONE
+ * rAF ever runs (Monogram loop, or a tiny internal one off-Home).
  */
 import { EFFECTS, HEATMAP, PULSE, telemetry } from "./effectsConfig";
 
+const AUDIO_URL = "/audio/intruder-snippet.mp3";
+const CROSSFADE_MS = 12; // baked head-tail crossfade to kill the junction click
+const VOLUME = 0.6; // fixed base volume (unchanged)
+const FADE_S = 0.008; // pause/resume click-guard fade
+
 type Graph = {
   ctx: AudioContext;
-  source: MediaElementAudioSourceNode;
+  gain: GainNode;
   analyser: AnalyserNode;
   freq: Uint8Array<ArrayBuffer>;
-  el: HTMLMediaElement;
+  buffer: AudioBuffer | null; // seamless loop buffer (null until decoded)
+  source: AudioBufferSourceNode | null; // the ONE playing source (or null)
+  loopDuration: number; // seconds
 };
 
 let graph: Graph | null = null;
+let decoding = false;
+let resumeOffset = 0; // musical offset (s) to (re)start from
+let srcStartCtxTime = 0; // ctx.currentTime when the current source started
+let srcStartOffset = 0; // offset the current source started at
+let wantPlay = false; // intent to play, pending decode / a valid gesture
+const playListeners = new Set<(p: boolean) => void>();
 let playingTarget = false; // desired state (real playback)
 let env = 0; // 0..1 fade envelope (in on play, out on pause)
 const bands = { bass: 0, mid: 0, high: 0 }; // smoothed (curved/normalized), pre-envelope
@@ -43,57 +59,204 @@ let visibilityHooked = false;
 const isMobile = () =>
   typeof window !== "undefined" && window.innerWidth <= 767;
 
-/** Create the audio graph once. Safe to call repeatedly (idempotent). */
-export function initAudioGraph(el: HTMLMediaElement | null): boolean {
-  if (!el) return false;
-  if (graph) return graph.el === el;
+/** Bake a seamless loop: crossfade the tail into the head once, so the source's
+ *  loop wrap (last sample -> first) is continuous and the junction never clicks.
+ *  Sacrifices the final CROSSFADE_MS as blend material only. */
+function makeSeamlessLoop(ctx: BaseAudioContext, src: AudioBuffer): AudioBuffer {
+  const sr = src.sampleRate;
+  const ch = src.numberOfChannels;
+  const L = Math.min(Math.round((sr * CROSSFADE_MS) / 1000), src.length >> 2);
+  const M = src.length - L; // loop length
+  const out = ctx.createBuffer(ch, M, sr);
+  for (let c = 0; c < ch; c++) {
+    const s = src.getChannelData(c);
+    const d = out.getChannelData(c);
+    for (let i = L; i < M; i++) d[i] = s[i]; // bulk
+    // head[0..L) = equal-power blend of tail (fading out) into head (fading in);
+    // d[0] = tail start (=s[M]) so d[M-1](=s[M-1]) -> d[0](=s[M]) is continuous.
+    for (let i = 0; i < L; i++) {
+      const w = (i + 0.5) / L; // 0..1
+      const wi = Math.sin((w * Math.PI) / 2); // head gain
+      const wo = Math.cos((w * Math.PI) / 2); // tail gain
+      d[i] = s[i] * wi + s[M + i] * wo;
+    }
+  }
+  return out;
+}
+
+/** Create the single audio graph + start decoding the loop (idempotent). */
+export function ensureAudio(): boolean {
+  if (graph) return true;
   const AC: typeof AudioContext =
     window.AudioContext ||
     (window as unknown as { webkitAudioContext: typeof AudioContext })
       .webkitAudioContext;
   if (!AC) return false;
   let ctx: AudioContext;
-  let source: MediaElementAudioSourceNode;
   try {
     ctx = new AC();
-    // createMediaElementSource throws if already created for this element.
-    source = ctx.createMediaElementSource(el);
   } catch {
     return false;
   }
+  const gain = ctx.createGain();
+  gain.gain.value = VOLUME;
   const analyser = ctx.createAnalyser();
   analyser.fftSize = isMobile() ? PULSE.fftSizeMobile : PULSE.fftSizeDesktop;
   analyser.smoothingTimeConstant = PULSE.smoothing;
-  // audio element -> MediaElementSource -> Analyser -> destination
-  source.connect(analyser);
+  gain.connect(analyser);
   analyser.connect(ctx.destination);
   graph = {
     ctx,
-    source,
+    gain,
     analyser,
-    freq: new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount)), // reused every frame
-    el,
+    freq: new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount)),
+    buffer: null,
+    source: null,
+    loopDuration: 0,
   };
   if (!visibilityHooked) {
     visibilityHooked = true;
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) zeroOut();
+      else if (graph && graph.source && graph.ctx.state === "suspended")
+        graph.ctx.resume().catch(() => {}); // resume playback returning to fg
     });
+  }
+  // Decode the loop once, off the audio thread.
+  if (!decoding) {
+    decoding = true;
+    fetch(AUDIO_URL)
+      .then((r) => r.arrayBuffer())
+      .then((a) => ctx.decodeAudioData(a))
+      .then((decoded) => {
+        if (!graph) return;
+        graph.buffer = makeSeamlessLoop(ctx, decoded);
+        graph.loopDuration = graph.buffer.length / graph.buffer.sampleRate;
+        telemetry.loopStart = 0;
+        telemetry.loopEnd = graph.loopDuration;
+        telemetry.loopDuration = graph.loopDuration;
+        if (wantPlay) tryStart(); // autoplay was requested before decode finished
+      })
+      .catch(() => {
+        decoding = false;
+      });
   }
   return true;
 }
 
-/** Resume the context (must follow a user gesture on Safari). */
-export function resumeAudio(): void {
-  if (graph && graph.ctx.state === "suspended") graph.ctx.resume().catch(() => {});
-  telemetry.audioState = graph ? graph.ctx.state : "none";
-}
-
-/** Real playback started/stopped — drives the fade envelope. */
-export function setPlaying(on: boolean): void {
+function notifyPlaying(on: boolean): void {
   playingTarget = on;
   telemetry.playing = on;
+  playListeners.forEach((cb) => cb(on));
   if (on && !externalDriver) startInternal();
+}
+
+/** Current musical offset (seconds) within the seamless loop. */
+function currentOffset(): number {
+  if (!graph || !graph.source) return resumeOffset;
+  const elapsed = graph.ctx.currentTime - srcStartCtxTime;
+  return (srcStartOffset + elapsed) % graph.loopDuration;
+}
+
+/** Create a fresh looping source at `offset` with a tiny fade-in. */
+function startSource(offset: number): void {
+  if (!graph || !graph.buffer || graph.source) return;
+  const { ctx, gain, buffer } = graph;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.loop = true;
+  src.loopStart = 0;
+  src.loopEnd = graph.loopDuration;
+  src.connect(gain);
+  const t = ctx.currentTime;
+  gain.gain.cancelScheduledValues(t);
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.linearRampToValueAtTime(VOLUME, t + FADE_S);
+  src.start(t, offset % graph.loopDuration);
+  srcStartCtxTime = t;
+  srcStartOffset = offset % graph.loopDuration;
+  graph.source = src;
+  notifyPlaying(true);
+}
+
+/** Stop the source keeping the musical position (short fade -> no click). */
+function stopSource(): void {
+  if (!graph || !graph.source) return;
+  resumeOffset = currentOffset();
+  const { ctx, gain } = graph;
+  const s = graph.source;
+  graph.source = null;
+  const t = ctx.currentTime;
+  gain.gain.cancelScheduledValues(t);
+  gain.gain.setValueAtTime(gain.gain.value, t);
+  gain.gain.linearRampToValueAtTime(0.0001, t + FADE_S);
+  try {
+    s.stop(t + FADE_S + 0.005);
+  } catch {
+    /* ignore */
+  }
+  s.onended = () => {
+    try {
+      s.disconnect();
+    } catch {
+      /* ignore */
+    }
+  };
+  notifyPlaying(false);
+}
+
+/** Try to actually start once decoded + the context can run (gesture). */
+function tryStart(): void {
+  if (!graph || !graph.buffer || graph.source) return;
+  graph.ctx
+    .resume()
+    .then(() => {
+      if (graph && graph.ctx.state === "running" && wantPlay) {
+        wantPlay = false;
+        startSource(resumeOffset);
+      }
+      telemetry.audioState = graph ? graph.ctx.state : "none";
+    })
+    .catch(() => {});
+}
+
+/** Resume the AudioContext on a valid user gesture (Safari) + honour intent. */
+export function userGesture(): void {
+  ensureAudio();
+  if (!graph) return;
+  if (graph.ctx.state === "suspended") graph.ctx.resume().catch(() => {});
+  if (wantPlay) tryStart();
+  telemetry.audioState = graph.ctx.state;
+}
+
+/** Request playback (autoplay attempt or ON): starts if ready, else pends. */
+export function requestPlay(): void {
+  ensureAudio();
+  wantPlay = true;
+  tryStart();
+}
+
+/** Pause: stop the source, keep the position (no restart on resume). */
+export function pausePlayback(): void {
+  wantPlay = false;
+  stopSource();
+}
+
+/** ON/OFF toggle used by the player control. */
+export function togglePlayback(): void {
+  if (isPlaying()) pausePlayback();
+  else requestPlay();
+}
+
+/** Exactly one audible source ever. */
+export function isPlaying(): boolean {
+  return !!(graph && graph.source);
+}
+
+/** Subscribe to play-state changes (for React `playing`). Returns unsubscribe. */
+export function subscribePlaying(cb: (p: boolean) => void): () => void {
+  playListeners.add(cb);
+  return () => playListeners.delete(cb);
 }
 
 /** The Monogram loop claims/releases the single rAF driver. */
@@ -248,18 +411,19 @@ function shape(raw: number, band: "bass" | "mid" | "high"): [number, number] {
 }
 
 function writeOut(barEnabled: boolean): void {
-  // Player-bar micro-waveform level, scaled by the runtime intensity (relative
-  // to the 2.5x preview default) so OFF/1x/2.5x/4x visibly change the bar too.
+  // Player-bar micro-waveform level, scaled by the per-breakpoint intensity so
+  // the OFF/…/x control visibly changes the bar too (mobile bar is smaller).
+  const bp = isMobile() ? PULSE.mobile : PULSE.desktop;
   const level = bands.bass * 0.65 + bands.mid * 0.35;
   const bar = barEnabled
-    ? Math.min(1, level * env * (PULSE.sonicIntensity / 2.5) * PULSE.barGain)
+    ? Math.min(1, level * env * (bp.intensity / 2.5) * bp.barGain)
     : 0;
   document.documentElement.style.setProperty("--pulse-bar", bar.toFixed(3));
   telemetry.bass = bands.bass * env;
   telemetry.mid = bands.mid * env;
   telemetry.high = bands.high * env;
   telemetry.pulseStrength = level * env;
-  telemetry.sonicIntensity = PULSE.sonicIntensity;
+  telemetry.sonicIntensity = bp.intensity;
   telemetry.audioState = graph ? graph.ctx.state : "none";
 }
 
@@ -287,8 +451,14 @@ export function tick(dtSec: number): void {
     return;
   }
   const dt = Math.min(0.05, Math.max(0, dtSec));
-  // Fade envelope toward the play state (shared by pulse + spectrum).
-  const running = !!graph && graph.ctx.state === "running";
+  // Fade envelope toward the play state (shared by pulse + spectrum). "running"
+  // requires a live source, so the analyser is only read while truly playing.
+  const running = !!graph && graph.ctx.state === "running" && !!graph.source;
+  if (graph) {
+    telemetry.audioState = graph.ctx.state;
+    telemetry.audioSourceCount = graph.source ? 1 : 0;
+    telemetry.audioOffset = currentOffset();
+  }
   const envTarget = playingTarget && running ? 1 : 0;
   const fadeRate = 1000 / (envTarget > env ? PULSE.fadeInMs : PULSE.fadeOutMs);
   env += (envTarget - env) * (1 - Math.exp(-fadeRate * dt));

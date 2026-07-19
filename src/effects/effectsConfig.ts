@@ -64,24 +64,40 @@ export const PULSE = {
   fadeInMs: 500, // 400–600ms envelope in when playback really starts
   fadeOutMs: 650, // 500–800ms envelope out on pause/OFF
 
-  // Per-effect 1x base gain and a hard visible clamp (the ceiling at any
-  // intensity). offset = min(clamp, band * base * sonicIntensity).
+  // Per-effect 1x base gain (shared) — offset = min(bp.clamp, band * base * bp.intensity).
   bgPulseBase: 0.03,
-  bgPulseClamp: 0.08, // background brightness up to 8%
   refractPulseBase: 0.038,
-  refractPulseClamp: 0.1, // refraction breath up to 10%
   scalePulseBase: 0.013,
-  scalePulseClamp: 0.035, // monogram mass up to +3.5% (1.035)
   specPulseBase: 0.04,
-  specPulseClamp: 0.12, // mid-driven specular up to +12%
   depthBase: 10, // world-unit z "mass" push (ortho camera -> subtle)
-  depthClamp: 26,
-  barGain: 1.0, // multiplier for the --pulse-bar CSS value (0..1)
+  // Breakpoint calibration: mobile is ~70% of the potentiated desktop, with its
+  // own visible ceilings. `intensity` is the runtime OFF/…/x control per device.
+  desktop: {
+    intensity: 2.5, // runtime OFF/1/2.5/4
+    bgClamp: 0.08, // background brightness up to 8%
+    refractClamp: 0.1, // refraction breath up to 10%
+    scaleClamp: 0.035, // monogram mass up to +3.5% (1.035)
+    specClamp: 0.12, // specular up to +12%
+    depthClamp: 26,
+    barGain: 1.0, // player-bar --pulse-bar scaling (~4px)
+  },
+  mobile: {
+    intensity: 1.75, // runtime OFF/0.5/1/1.75/2.5
+    bgClamp: 0.06, // 4–6% background
+    refractClamp: 0.08, // +5–8% refraction breath
+    scaleClamp: 0.025, // +1.8–2.5% mass (1.018–1.025)
+    specClamp: 0.09, // +6–9% specular
+    depthClamp: 16, // very subtle depth
+    barGain: 1.15, // ~2–3px player-bar movement (bar is narrower on mobile)
+  },
 };
 
-/** Runtime setter for the debug panel's Sonic-intensity control. */
+/** Runtime setters for the debug panel's per-breakpoint Sonic-intensity. */
 export function setSonicIntensity(v: number): void {
-  PULSE.sonicIntensity = v;
+  PULSE.desktop.intensity = v;
+}
+export function setMobileSonicIntensity(v: number): void {
+  PULSE.mobile.intensity = v;
 }
 
 // ----------------------------------------- DESKTOP SPECTRAL HEATMAP (thermal field)
@@ -227,6 +243,12 @@ export const telemetry = {
   fps: 0,
   audioState: "none" as string,
   playing: false,
+  // Gapless playback
+  audioSourceCount: 0, // audible sources (must always be 0 or 1)
+  audioOffset: 0, // current loop offset (s)
+  loopStart: 0,
+  loopEnd: 0,
+  loopDuration: 0,
   // Desktop spectral heatmap
   hmSub: 0, // energy 0..1 per broad group
   hmBass: 0,
