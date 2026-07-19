@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   ensureAudio,
+  prefetchAudio,
   subscribePlaying,
   togglePlayback,
   userGesture,
@@ -48,11 +49,19 @@ export default function AudioProvider({
     // Mirror the engine's real play state (never a fake ON).
     const unsub = subscribePlaying(setPlayingState);
 
-    // Build the graph + decode the loop; a one-shot autoplay runs after decode
-    // (honoured only if the browser allows audible autoplay). The first user
-    // gesture just UNLOCKS the context (iOS) so the player toggle is instant —
-    // it never auto-starts music on an unrelated tap. Self-removing, guarded.
-    ensureAudio();
+    // Prefetch the MP3 bytes now, but DON'T create the AudioContext yet — iOS
+    // Safari can permanently mute a context built outside a user gesture. The
+    // first gesture creates + unlocks the context (userGesture); the player
+    // toggle then starts playback. The first tap never auto-starts music on an
+    // unrelated element. Self-removing, guarded.
+    prefetchAudio();
+    // Desktop (non-touch) has no iOS "muted context" hazard, so build the
+    // context at mount and let the one-shot autoplay run where the browser
+    // permits it. Touch devices (iPhone/iPad) skip this and create the context
+    // only inside the first gesture below.
+    const isTouch =
+      "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    if (!isTouch) ensureAudio();
     const onFirstGesture = () => {
       userGesture();
       window.removeEventListener("pointerdown", onFirstGesture);

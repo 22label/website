@@ -35,6 +35,8 @@ type Graph = {
 
 let graph: Graph | null = null;
 let decoding = false;
+let pendingArrayBuffer: ArrayBuffer | null = null; // prefetched MP3 bytes (mount)
+let prefetching = false;
 let resumeOffset = 0; // musical offset (s) to (re)start from
 let srcStartCtxTime = 0; // ctx.currentTime when the current source started
 let srcStartOffset = 0; // offset the current source started at
@@ -124,12 +126,23 @@ export function ensureAudio(): boolean {
         graph.ctx.resume().catch(() => {}); // resume playback returning to fg
     });
   }
-  // Decode the loop once, off the audio thread.
+  // Decode the loop once, off the audio thread. Reuse the MP3 bytes prefetched
+  // at mount (no download wait on the first tap); fall back to fetching now.
+  // Use the CALLBACK form of decodeAudioData wrapped in a Promise — the promise
+  // form is unreliable on older iOS Safari / webkitAudioContext (can silently
+  // never resolve).
   if (!decoding) {
     decoding = true;
-    fetch(AUDIO_URL)
-      .then((r) => r.arrayBuffer())
-      .then((a) => ctx.decodeAudioData(a))
+    const bytes: Promise<ArrayBuffer> = pendingArrayBuffer
+      ? Promise.resolve(pendingArrayBuffer)
+      : fetch(AUDIO_URL).then((r) => r.arrayBuffer());
+    bytes
+      .then(
+        (a) =>
+          new Promise<AudioBuffer>((resolve, reject) => {
+            ctx.decodeAudioData(a, resolve, reject);
+          }),
+      )
       .then((decoded) => {
         if (!graph) return;
         graph.buffer = makeSeamlessLoop(ctx, decoded);
@@ -271,9 +284,22 @@ export function userGesture(): void {
   telemetry.audioState = graph.ctx.state;
 }
 
-/** Mount autoplay intent (honoured once after decode; see ensureAudio). */
-export function requestPlay(): void {
-  ensureAudio();
+/** Prefetch the MP3 bytes at mount WITHOUT creating an AudioContext. The context
+ *  itself is created lazily inside the first user gesture (see ensureAudio) —
+ *  iOS Safari can leave a context that was constructed outside a gesture unable
+ *  to ever produce sound, so we defer construction and only pay the download up
+ *  front. Safe to call repeatedly; runs once. */
+export function prefetchAudio(): void {
+  if (prefetching || pendingArrayBuffer || typeof fetch === "undefined") return;
+  prefetching = true;
+  fetch(AUDIO_URL)
+    .then((r) => r.arrayBuffer())
+    .then((a) => {
+      pendingArrayBuffer = a;
+    })
+    .catch(() => {
+      prefetching = false;
+    });
 }
 
 /** Pause: stop the source, keep the position (no restart on resume). */
