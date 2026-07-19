@@ -8,6 +8,7 @@ import {
   FIELD,
   HEATMAP,
   PULSE,
+  TACTILE,
   telemetry,
 } from "@/effects/effectsConfig";
 import {
@@ -531,6 +532,23 @@ export default function Monogram() {
         uniform float uFieldSpec;     // local specular boost
         uniform float uAudioRefract;  // global refraction breath from bass/mid
         uniform float uAudioSpec;     // global specular lift from mids
+        // Mobile tactile pressure / liquid touch (all 0 -> identical output) ----
+        uniform vec2 uTouchPos;       // y-up screen UV of the finger
+        uniform float uTouchActive;   // 0..1 press envelope * intensity
+        uniform float uTouchRadius;
+        uniform float uTouchDisp;     // inward depression pull
+        uniform float uTouchRefract;  // local refraction boost
+        uniform float uTouchRgb;      // local RGB separation boost
+        uniform float uTouchSpec;     // local specular boost
+        uniform vec2 uRippleCenter;
+        uniform float uRippleProgress;// 0..1 active, <0 inactive
+        uniform float uRippleStrength;
+        uniform float uRippleRadiusMax;
+        uniform float uRippleWidth;
+        uniform float uRippleRefract;
+        uniform float uRippleRgb;
+        uniform float uRippleSpec;
+        uniform float uRippleDisp;
         varying vec2 vScreenUV;
         varying vec3 vViewNormal;
         varying vec3 vLocalPos;
@@ -558,6 +576,30 @@ export default function Monogram() {
           gdd.x *= uResolution.x / uResolution.y;
           float inflG = uFieldStrength * exp(-dot(gdd, gdd) / (uFieldRadius * uFieldRadius));
           float refractMul = 1.0 + inflG * uFieldRefract + uAudioRefract;
+
+          // Tactile liquid touch: a local, temporary depression (an inward lens
+          // that pulls the sampling toward the finger) + an expanding ring on
+          // release. All terms are 0 when not touching / on desktop.
+          vec2 tdd = vScreenUV - uTouchPos;
+          tdd.x *= uResolution.x / uResolution.y;
+          float ti = uTouchActive * exp(-dot(tdd, tdd) / (uTouchRadius * uTouchRadius));
+          float ri = 0.0;
+          vec2 rOut = vec2(0.0);
+          if (uRippleProgress >= 0.0) {
+            vec2 rdd = vScreenUV - uRippleCenter;
+            rdd.x *= uResolution.x / uResolution.y;
+            float rDist = length(rdd);
+            float ringR = uRippleProgress * uRippleRadiusMax;
+            ri = exp(-pow((rDist - ringR) / uRippleWidth, 2.0))
+              * uRippleStrength * (1.0 - uRippleProgress);
+            rOut = normalize(rdd + 1e-5) * (ri * uRippleDisp);
+          }
+          refractMul += ti * uTouchRefract + ri * uRippleRefract;
+          refractDir -= normalize(tdd + 1e-5) * (ti * uTouchDisp); // pull toward finger
+          refractDir += rOut;                                       // ripple nudges outward
+          float rgbMul = 1.0 + ti * uTouchRgb + ri * uRippleRgb;
+          float specTouch = ti * uTouchSpec + ri * uRippleSpec;
+
           vec2 uv = vScreenUV + refractDir * uRefractionStrength * refractMul;
 
           float b = uBlurStrength;
@@ -582,7 +624,7 @@ export default function Monogram() {
 
           ${
             dispersion
-              ? `float ca = uChromaticAberration * refractMul;
+              ? `float ca = uChromaticAberration * refractMul * rgbMul;
           col.r = mix(col.r, texture2D(tBackground, uv + refractDir * ca).r, 0.7);
           col.b = mix(col.b, texture2D(tBackground, uv - refractDir * ca).b, 0.7);`
               : ``
@@ -596,7 +638,7 @@ export default function Monogram() {
           vec3 L = normalize(uLightDirection);
           vec3 H = normalize(L + V);
           float spec = pow(max(dot(N, H), 0.0), 48.0) * uSpecularStrength
-            * (1.0 + inflG * uFieldSpec + uAudioSpec);
+            * (1.0 + inflG * uFieldSpec + uAudioSpec + specTouch);
           col += spec * vec3(1.0);
 
           gl_FragColor = vec4(col, 1.0);
@@ -646,6 +688,22 @@ export default function Monogram() {
             uFieldSpec: { value: 0 },
             uAudioRefract: { value: 0 },
             uAudioSpec: { value: 0 },
+            uTouchPos: { value: new THREE.Vector2(0.5, 0.5) },
+            uTouchActive: { value: 0 },
+            uTouchRadius: { value: TACTILE.radius },
+            uTouchDisp: { value: 0 },
+            uTouchRefract: { value: 0 },
+            uTouchRgb: { value: 0 },
+            uTouchSpec: { value: 0 },
+            uRippleCenter: { value: new THREE.Vector2(0.5, 0.5) },
+            uRippleProgress: { value: -1 },
+            uRippleStrength: { value: 0 },
+            uRippleRadiusMax: { value: TACTILE.rippleMaxRadius },
+            uRippleWidth: { value: TACTILE.rippleWidth },
+            uRippleRefract: { value: 0 },
+            uRippleRgb: { value: 0 },
+            uRippleSpec: { value: 0 },
+            uRippleDisp: { value: 0 },
             uQualityTier: { value: glassTierOrder.indexOf(tier) },
           },
           vertexShader: GLASS_VERTEX,
@@ -800,6 +858,28 @@ export default function Monogram() {
       let fieldLastY = 0.5;
       let scrollRotY = mesh.rotation.y; // authoritative scroll/inertia rotation
       let fpsSmooth = 60;
+
+      // --- Tactile pressure / liquid touch state (mobile only) ---------------
+      // A single press + ripple at a time. Reused raycaster/vectors, no per-frame
+      // allocation. All uniform offsets are local + temporary.
+      const raycaster = new THREE.Raycaster();
+      const ndc = new THREE.Vector2();
+      const touchUV = new THREE.Vector2(0.5, 0.5); // y-up screen UV of the finger
+      const rippleUV = new THREE.Vector2(0.5, 0.5);
+      let tacCandidate = false; // touched the monogram, waiting to activate
+      let tacActive = false; // press recognised (held long enough, still)
+      let tacStartX = 0;
+      let tacStartY = 0;
+      let tacStartTime = 0;
+      let pressStrength = 0; // 0..1 press envelope
+      let holdRefract = 0; // 0..1 hold-refraction ramp
+      let rippleActive = false;
+      let rippleStart = 0;
+      let rippleDurMs = TACTILE.rippleDurationMs;
+      let rippleScale = 1; // full press vs small tap
+      const hapticSupported =
+        typeof navigator !== "undefined" && "vibrate" in navigator;
+      telemetry.tacHapticSupported = hapticSupported;
 
       // --- Loop (continuous: the marquee scrolls every frame) ----------------
       let angularVelocity = 0; // rad/s
@@ -1035,6 +1115,65 @@ export default function Monogram() {
           gu.uAudioSpec.value = audioSpec;
         }
 
+        // --- Tactile pressure / liquid touch (mobile) -------------------------
+        // Recognise the press in the SAME loop (no timer): a held candidate
+        // becomes active after holdActivationMs. Envelopes are dt-based; the
+        // ripple is pure shader math (origin + progress). Never touches heat /
+        // rotation / scroll. Everything settles to 0 when idle / on desktop.
+        if (
+          tacCandidate &&
+          !tacActive &&
+          now - tacStartTime >= TACTILE.holdActivationMs
+        ) {
+          tacActive = true; // press-in recognised
+        }
+        const pressTarget = tacActive ? 1 : 0;
+        const pRate = pressTarget ? TACTILE.pressAttackRate : TACTILE.pressReleaseRate;
+        pressStrength += (pressTarget - pressStrength) * (1 - Math.exp(-pRate * dtSec));
+        if (pressStrength < 0.0005 && !pressTarget) pressStrength = 0;
+        if (tacActive) {
+          holdRefract = Math.min(1, holdRefract + (dtSec * 1000) / TACTILE.holdToMaxMs);
+        } else {
+          holdRefract *= Math.exp(-TACTILE.holdReleaseRate * dtSec);
+          if (holdRefract < 0.0005) holdRefract = 0;
+        }
+        let rippleProg = -1;
+        if (rippleActive) {
+          rippleProg = (now - rippleStart) / rippleDurMs;
+          if (rippleProg >= 1) {
+            rippleActive = false;
+            rippleProg = -1;
+          }
+        }
+        if (glassShader) {
+          const gu = glassShader.uniforms;
+          const rmScale = prefersReducedMotion ? TACTILE.reducedMotionScale : 1;
+          const pI = TACTILE.pressureIntensity * rmScale;
+          const active = pressStrength * pI;
+          gu.uTouchActive.value = active;
+          (gu.uTouchPos.value as import("three").Vector2).copy(touchUV);
+          gu.uTouchRadius.value = TACTILE.radius;
+          gu.uTouchDisp.value = TACTILE.dispMax * (0.5 + 0.5 * holdRefract);
+          gu.uTouchRefract.value = TACTILE.refractMax * (0.4 + 0.6 * holdRefract);
+          gu.uTouchRgb.value = TACTILE.rgbMax * holdRefract;
+          gu.uTouchSpec.value = TACTILE.specMax * holdRefract;
+          const rI = TACTILE.rippleIntensity * rmScale * rippleScale;
+          (gu.uRippleCenter.value as import("three").Vector2).copy(rippleUV);
+          gu.uRippleProgress.value = rippleActive ? rippleProg : -1;
+          gu.uRippleStrength.value = rippleActive ? rI : 0;
+          gu.uRippleRefract.value = TACTILE.rippleRefractMax;
+          gu.uRippleRgb.value = TACTILE.rippleRgbMax;
+          gu.uRippleSpec.value = TACTILE.rippleSpecMax;
+          gu.uRippleDisp.value = TACTILE.rippleDispMax;
+          telemetry.tacPressStrength = active;
+          telemetry.tacRefractBoost = TACTILE.refractMax * (0.4 + 0.6 * holdRefract) * active;
+          telemetry.tacRippleProgress = rippleActive ? rippleProg : -1;
+          telemetry.tacRippleRadius = rippleActive ? rippleProg * TACTILE.rippleMaxRadius : 0;
+          telemetry.tacActive = tacActive;
+          telemetry.tacCandidate = tacCandidate;
+          telemetry.tacHoldMs = tacActive ? now - tacStartTime : 0;
+        }
+
         // --- Desktop spectral heatmap (continuous thermal field) -------------
         // Desktop-only (>=1024px), audio-driven; upload the band energies to the
         // reused LINEAR DataTexture (single visual source, refracted via the RT).
@@ -1154,6 +1293,13 @@ export default function Monogram() {
       };
       const onPointerMove = (e: PointerEvent) => {
         if (!dragging) return;
+        // While a tactile press is active the monogram holds still under the
+        // finger — suppress rotation (position is preserved, inertia untouched).
+        if (tacActive) {
+          lastPointerY = e.clientY;
+          lastPointerT = performance.now();
+          return;
+        }
         const t = performance.now();
         const dy = e.clientY - lastPointerY;
         const dtp = Math.max(0.001, (t - lastPointerT) / 1000);
@@ -1177,6 +1323,111 @@ export default function Monogram() {
       canvas.addEventListener("pointermove", onPointerMove);
       canvas.addEventListener("pointerup", onPointerUp);
       canvas.addEventListener("pointercancel", onPointerUp);
+
+      // --- Tactile pressure / liquid touch (mobile only) ---------------------
+      // Passive touch listeners on the canvas — NEVER preventDefault, so scroll,
+      // taps, links, menu and native gestures stay free. A touch on the monogram
+      // (raycast hit) starts a press CANDIDATE; it only becomes an active press
+      // in the loop after holdActivationMs while staying still. Any real movement
+      // before that = a drag/scroll -> cancel. Multi-touch / cancel -> cancel.
+      const tacAllowed = () =>
+        vw <= TACTILE.mobileMaxWidth && EFFECTS.ENABLE_MOBILE_TACTILE_PRESSURE;
+      const setTouchUV = (cx: number, cy: number) => {
+        touchUV.set(cx / window.innerWidth, 1 - cy / window.innerHeight);
+      };
+      const cancelTactile = () => {
+        tacCandidate = false;
+        tacActive = false;
+        telemetry.tacCandidate = false;
+        telemetry.tacActive = false;
+      };
+      const startRipple = (small: boolean) => {
+        rippleUV.copy(touchUV);
+        rippleStart = performance.now();
+        rippleDurMs = small
+          ? TACTILE.tapRippleDurationMs
+          : TACTILE.rippleDurationMs;
+        rippleScale = small ? TACTILE.tapRippleScale : 1;
+        rippleActive = true;
+      };
+      const fireHaptic = () => {
+        if (
+          hapticSupported &&
+          !prefersReducedMotion &&
+          TACTILE.pressureIntensity > 0
+        ) {
+          try {
+            navigator.vibrate?.(TACTILE.hapticMs);
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+      const onTouchStart = (e: TouchEvent) => {
+        if (!tacAllowed()) return;
+        if (e.touches.length > 1) {
+          cancelTactile(); // multi-touch (pinch etc.) -> never interfere
+          return;
+        }
+        const tt = e.touches[0];
+        // Raycast: only start if the touch visually hits the monogram mesh.
+        ndc.set(
+          (tt.clientX / window.innerWidth) * 2 - 1,
+          -(tt.clientY / window.innerHeight) * 2 + 1,
+        );
+        raycaster.setFromCamera(ndc, camera);
+        const hit = raycaster.intersectObject(mesh, false).length > 0;
+        telemetry.tacHitMonogram = hit;
+        telemetry.tacTouchX = tt.clientX / window.innerWidth;
+        telemetry.tacTouchY = tt.clientY / window.innerHeight;
+        telemetry.tacScrollCancelled = false;
+        if (!hit) return; // empty canvas / not the monogram -> leave it alone
+        tacCandidate = true;
+        tacActive = false;
+        tacStartX = tt.clientX;
+        tacStartY = tt.clientY;
+        tacStartTime = performance.now();
+        setTouchUV(tt.clientX, tt.clientY);
+      };
+      const onTouchMove = (e: TouchEvent) => {
+        if (!tacCandidate && !tacActive) return;
+        if (e.touches.length > 1) {
+          cancelTactile();
+          return;
+        }
+        const tt = e.touches[0];
+        const dist = Math.hypot(tt.clientX - tacStartX, tt.clientY - tacStartY);
+        telemetry.tacTouchX = tt.clientX / window.innerWidth;
+        telemetry.tacTouchY = tt.clientY / window.innerHeight;
+        if (!tacActive) {
+          // Moved before activation -> it's a drag/scroll: release the gesture.
+          if (dist > TACTILE.moveThresholdPx) {
+            tacCandidate = false;
+            telemetry.tacScrollCancelled = true;
+            telemetry.tacCandidate = false;
+          }
+        } else if (dist > TACTILE.cancelThresholdPx) {
+          cancelTactile(); // moved too far during the press -> cancel cleanly
+        } else {
+          setTouchUV(tt.clientX, tt.clientY); // small drift: follow the finger
+        }
+      };
+      const onTouchEnd = (e: TouchEvent) => {
+        if (e.touches.length > 0) return; // other fingers still down
+        if (tacActive) {
+          startRipple(false); // valid press release -> full ripple + haptic
+          fireHaptic();
+        } else if (tacCandidate) {
+          const held = performance.now() - tacStartTime;
+          if (held < TACTILE.tapMaxMs && !prefersReducedMotion) startRipple(true); // tap
+        }
+        tacCandidate = false;
+        tacActive = false;
+      };
+      canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+      canvas.addEventListener("touchmove", onTouchMove, { passive: true });
+      canvas.addEventListener("touchend", onTouchEnd, { passive: true });
+      canvas.addEventListener("touchcancel", cancelTactile, { passive: true });
 
       // --- Frequency Field input (desktop pointer + mobile touch) ------------
       // Passive, window-level, read-only: it never calls preventDefault, so
@@ -1249,6 +1500,7 @@ export default function Monogram() {
       const onVisibility = () => {
         if (document.hidden) {
           paused = true;
+          cancelTactile(); // don't leave a press/ripple stuck across background
           cancelAnimationFrame(rafId);
         } else if (paused) {
           paused = false;
@@ -1298,6 +1550,10 @@ export default function Monogram() {
         canvas.removeEventListener("pointermove", onPointerMove);
         canvas.removeEventListener("pointerup", onPointerUp);
         canvas.removeEventListener("pointercancel", onPointerUp);
+        canvas.removeEventListener("touchstart", onTouchStart);
+        canvas.removeEventListener("touchmove", onTouchMove);
+        canvas.removeEventListener("touchend", onTouchEnd);
+        canvas.removeEventListener("touchcancel", cancelTactile);
         marqueeTexPromise.then((tex) => tex?.dispose()).catch(() => {});
         blankTex.dispose();
         hmTex.dispose();

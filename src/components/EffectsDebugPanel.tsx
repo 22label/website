@@ -5,11 +5,15 @@ import {
   EFFECTS,
   HEATMAP,
   PULSE,
+  TACTILE,
   setHeatmapIntensity,
   setHeatmapMaxHeight,
   setHeatmapOpacity,
   setHeatmapSmoothing,
   setSonicIntensity,
+  setTactileHoldMs,
+  setTactilePressureIntensity,
+  setTactileRippleIntensity,
   telemetry,
 } from "@/effects/effectsConfig";
 import styles from "./EffectsDebugPanel.module.css";
@@ -32,6 +36,10 @@ export default function EffectsDebugPanel() {
       return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time client reveal
     setEnabled(true);
+    // Expose the live telemetry for real-time inspection while debugging (only
+    // ever with ?debugEffects=1; harmless and absent for normal visitors).
+    (window as unknown as { __telemetry?: typeof telemetry }).__telemetry =
+      telemetry;
     const id = window.setInterval(() => force((n) => (n + 1) % 1e6), 250);
     return () => window.clearInterval(id);
   }, []);
@@ -51,7 +59,8 @@ export default function EffectsDebugPanel() {
     key:
       | "ENABLE_FREQUENCY_FIELD"
       | "ENABLE_SONIC_PULSE"
-      | "ENABLE_DESKTOP_SPECTRAL_HEATMAP",
+      | "ENABLE_DESKTOP_SPECTRAL_HEATMAP"
+      | "ENABLE_MOBILE_TACTILE_PRESSURE",
   ) => {
     EFFECTS[key] = !EFFECTS[key];
     force((n) => n + 1);
@@ -65,6 +74,9 @@ export default function EffectsDebugPanel() {
   const setHmH = pick(setHeatmapMaxHeight);
   const setHmSmooth = pick(setHeatmapSmoothing);
   const setHmOp = pick(setHeatmapOpacity);
+  const setTacP = pick(setTactilePressureIntensity);
+  const setTacR = pick(setTactileRippleIntensity);
+  const setTacH = pick(setTactileHoldMs);
   const seg = (
     current: number,
     opts: [string, number][],
@@ -188,6 +200,59 @@ export default function EffectsDebugPanel() {
       {row("high energy", pct(t.hmHigh))}
       {row("hm peak", pct(t.hmPeak))}
       {row("hm max px", `${Math.round(t.hmMaxHeightPx)}px`)}
+
+      <div className={styles.toggles}>
+        <button
+          type="button"
+          className={`${styles.toggle} ${EFFECTS.ENABLE_MOBILE_TACTILE_PRESSURE ? styles.on : ""}`}
+          onClick={() => flip("ENABLE_MOBILE_TACTILE_PRESSURE")}
+        >
+          TACTILE {EFFECTS.ENABLE_MOBILE_TACTILE_PRESSURE ? "ON" : "OFF"}
+        </button>
+      </div>
+      <div className={styles.section}>pressure intensity</div>
+      {seg(
+        TACTILE.pressureIntensity,
+        [
+          ["OFF", 0],
+          ["0.5×", 0.5],
+          ["1×", 1],
+          ["1.5×", 1.5],
+        ],
+        setTacP,
+      )}
+      <div className={styles.section}>ripple intensity</div>
+      {seg(
+        TACTILE.rippleIntensity,
+        [
+          ["OFF", 0],
+          ["0.5×", 0.5],
+          ["1×", 1],
+          ["1.5×", 1.5],
+        ],
+        setTacR,
+      )}
+      <div className={styles.section}>hold activation</div>
+      {seg(
+        TACTILE.holdActivationMs,
+        [
+          ["180", 180],
+          ["220", 220],
+          ["280", 280],
+        ],
+        setTacH,
+      )}
+      {row("candidate", t.tacCandidate ? "yes" : "no")}
+      {row("press active", t.tacActive ? "yes" : "no")}
+      {row("scroll cancel", t.tacScrollCancelled ? "yes" : "no")}
+      {row("hit monogram", t.tacHitMonogram ? "yes" : "no")}
+      {row("touch x/y", `${t.tacTouchX.toFixed(2)} ${t.tacTouchY.toFixed(2)}`)}
+      {row("hold ms", `${Math.round(t.tacHoldMs)}`)}
+      {row("pressure", pct(t.tacPressStrength))}
+      {row("refr boost", pct(t.tacRefractBoost))}
+      {row("ripple prog", t.tacRippleProgress < 0 ? "—" : pct(t.tacRippleProgress))}
+      {row("ripple radius", t.tacRippleRadius.toFixed(2))}
+      {row("haptic", t.tacHapticSupported ? "supported" : "no")}
 
       <div className={styles.section}>audio (bass / mid / high)</div>
       {trio("raw", t.rawBass, t.rawMid, t.rawHigh)}

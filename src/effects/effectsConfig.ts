@@ -13,6 +13,7 @@ export const EFFECTS = {
   ENABLE_FREQUENCY_FIELD: true,
   ENABLE_SONIC_PULSE: true,
   ENABLE_DESKTOP_SPECTRAL_HEATMAP: true, // desktop-only continuous thermal field
+  ENABLE_MOBILE_TACTILE_PRESSURE: true, // mobile-only liquid touch (press + ripple)
 };
 
 // ---------------------------------------------------------------- FREQUENCY FIELD
@@ -119,6 +120,59 @@ export const HEATMAP = {
   normHeadroom: 1.3,
 };
 
+// ------------------------------------------ MOBILE TACTILE PRESSURE / LIQUID TOUCH
+// Touch on the monogram -> soft optical depression; hold -> local refraction ramp;
+// release -> a single expanding ripple + a very short haptic where supported. A
+// purely local, temporary offset in the existing glass shader (no geometry edits,
+// no new loop/pass/texture). Never touches heat / rotation / scroll.
+export const TACTILE = {
+  mobileMaxWidth: 767, // mobile-only (<= this width)
+  // touch -> drag/scroll discrimination
+  moveThresholdPx: 11, // move beyond this BEFORE activation => it's a drag/scroll
+  cancelThresholdPx: 24, // move beyond this DURING an active press => cancel
+  holdActivationMs: 220, // runtime 180 / 220 / 280
+  tapMaxMs: 180, // below this on release = a small tap ripple
+  holdToMaxMs: 850, // time under continuous hold to reach max local refraction
+  // envelopes (per-second exp rates, frame-rate independent)
+  pressAttackRate: 12, // press-in ease (~230ms)
+  pressReleaseRate: 20, // quick return on release
+  holdReleaseRate: 15, // hold-refraction decay on release
+  // local maxima at full hold (fractions)
+  radius: 0.16, // normalized-height falloff radius (~12–20% of the monogram)
+  dispMax: 0.05, // inward refraction pull (the soft depression)
+  refractMax: 0.2, // +20% local refraction (target 15–22%)
+  rgbMax: 0.09, // +9% local RGB separation
+  specMax: 0.11, // +11% local specular
+  // ripple (single, math-only in the shader)
+  rippleDurationMs: 720, // 550–850ms
+  tapRippleDurationMs: 340,
+  rippleMaxRadius: 0.62, // normalized-height max radius
+  rippleWidth: 0.06, // soft ring width (~5–10% of radius)
+  rippleRefractMax: 0.16, // +16%
+  rippleRgbMax: 0.08, // +8%
+  rippleSpecMax: 0.08, // +8%
+  rippleDispMax: 0.03,
+  tapRippleScale: 0.5, // smaller/lighter ripple for taps
+  overshoot: 0.025, // <=3% elastic overshoot on surface return
+  overshootMs: 180,
+  hapticMs: 8, // 6–10ms single pulse (Android; iOS usually ignores)
+  reducedMotionScale: 0.2, // strong reduction under prefers-reduced-motion (no ripple/haptic)
+  // runtime intensities (debug panel)
+  pressureIntensity: 1.0, // OFF/0.5/1/1.5
+  rippleIntensity: 1.0, // OFF/0.5/1/1.5
+};
+
+/** Runtime setters for the debug panel's tactile controls. */
+export function setTactilePressureIntensity(v: number): void {
+  TACTILE.pressureIntensity = v;
+}
+export function setTactileRippleIntensity(v: number): void {
+  TACTILE.rippleIntensity = v;
+}
+export function setTactileHoldMs(v: number): void {
+  TACTILE.holdActivationMs = v;
+}
+
 /** Runtime setters for the debug panel's heatmap controls. */
 export function setHeatmapIntensity(v: number): void {
   HEATMAP.intensity = v;
@@ -186,4 +240,20 @@ export const telemetry = {
   hmSmoothing: 2,
   hmOpacity: 0.52,
   hmActive: false, // rendered right now (desktop + on + audio)
+  // Mobile tactile pressure / liquid touch
+  tacCandidate: false,
+  tacActive: false,
+  tacScrollCancelled: false,
+  tacTouchX: 0,
+  tacTouchY: 0,
+  tacHitMonogram: false,
+  tacHoldMs: 0,
+  tacPressStrength: 0,
+  tacRefractBoost: 0,
+  tacRippleProgress: 0, // -1 when inactive
+  tacRippleRadius: 0,
+  tacHapticSupported: false,
+  tacPressureIntensity: 1,
+  tacRippleIntensity: 1,
+  tacHoldActivationMs: 220,
 };
