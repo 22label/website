@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import {
   EFFECTS,
+  HEATMAP,
   PULSE,
+  setHeatmapIntensity,
+  setHeatmapMaxHeight,
+  setHeatmapOpacity,
+  setHeatmapSmoothing,
   setSonicIntensity,
   telemetry,
 } from "@/effects/effectsConfig";
@@ -42,14 +47,42 @@ export default function EffectsDebugPanel() {
     </div>
   );
 
-  const flip = (key: "ENABLE_FREQUENCY_FIELD" | "ENABLE_SONIC_PULSE") => {
+  const flip = (
+    key:
+      | "ENABLE_FREQUENCY_FIELD"
+      | "ENABLE_SONIC_PULSE"
+      | "ENABLE_DESKTOP_SPECTRAL_HEATMAP",
+  ) => {
     EFFECTS[key] = !EFFECTS[key];
     force((n) => n + 1);
   };
-  const setIntensity = (v: number) => {
-    setSonicIntensity(v);
+  const pick = (fn: (v: number) => void) => (v: number) => {
+    fn(v);
     force((n) => n + 1);
   };
+  const setIntensity = pick(setSonicIntensity);
+  const setHmInt = pick(setHeatmapIntensity);
+  const setHmH = pick(setHeatmapMaxHeight);
+  const setHmSmooth = pick(setHeatmapSmoothing);
+  const setHmOp = pick(setHeatmapOpacity);
+  const seg = (
+    current: number,
+    opts: [string, number][],
+    onPick: (v: number) => void,
+  ) => (
+    <div className={styles.toggles}>
+      {opts.map(([label, v]) => (
+        <button
+          key={label}
+          type="button"
+          className={`${styles.toggle} ${current === v ? styles.on : ""}`}
+          onClick={() => onPick(v)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
   const trio = (label: string, a: number, b: number, c: number) => (
     <div className={styles.row}>
       <span className={styles.k}>{label}</span>
@@ -97,6 +130,64 @@ export default function EffectsDebugPanel() {
           </button>
         ))}
       </div>
+
+      <div className={styles.toggles}>
+        <button
+          type="button"
+          className={`${styles.toggle} ${EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP ? styles.on : ""}`}
+          onClick={() => flip("ENABLE_DESKTOP_SPECTRAL_HEATMAP")}
+        >
+          HEATMAP {EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP ? "ON" : "OFF"}
+        </button>
+      </div>
+      <div className={styles.section}>heatmap max height</div>
+      {seg(
+        HEATMAP.maxHeightPx,
+        [
+          ["60", 60],
+          ["80", 80],
+          ["100", 100],
+        ],
+        setHmH,
+      )}
+      <div className={styles.section}>heatmap intensity</div>
+      {seg(
+        HEATMAP.intensity,
+        [
+          ["0.5×", 0.5],
+          ["1×", 1],
+          ["1.5×", 1.5],
+          ["2×", 2],
+        ],
+        setHmInt,
+      )}
+      <div className={styles.section}>spatial smoothing</div>
+      {seg(
+        HEATMAP.smoothing,
+        [
+          ["LOW", 0],
+          ["MED", 1],
+          ["HIGH", 2],
+        ],
+        setHmSmooth,
+      )}
+      <div className={styles.section}>colour opacity</div>
+      {seg(
+        HEATMAP.opacity,
+        [
+          ["25%", 0.25],
+          ["40%", 0.4],
+          ["55%", 0.55],
+          ["70%", 0.7],
+        ],
+        setHmOp,
+      )}
+      {row("bands", HEATMAP.numBands.toString())}
+      {row("hm active", t.hmActive ? "yes" : "no")}
+      {trio("sub/bass/mid", t.hmSub, t.hmBass, t.hmMid)}
+      {row("high energy", pct(t.hmHigh))}
+      {row("hm peak", pct(t.hmPeak))}
+      {row("hm max px", `${Math.round(t.hmMaxHeightPx)}px`)}
 
       <div className={styles.section}>audio (bass / mid / high)</div>
       {trio("raw", t.rawBass, t.rawMid, t.rawHigh)}

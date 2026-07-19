@@ -12,6 +12,7 @@
 export const EFFECTS = {
   ENABLE_FREQUENCY_FIELD: true,
   ENABLE_SONIC_PULSE: true,
+  ENABLE_DESKTOP_SPECTRAL_HEATMAP: true, // desktop-only continuous thermal field
 };
 
 // ---------------------------------------------------------------- FREQUENCY FIELD
@@ -82,6 +83,56 @@ export function setSonicIntensity(v: number): void {
   PULSE.sonicIntensity = v;
 }
 
+// ----------------------------------------- DESKTOP SPECTRAL HEATMAP (thermal field)
+// A single continuous, soft energy field at the bottom of the desktop viewport —
+// NO bars/lines/skyline. ~40 perceptual bands feed a spatially-blended surface;
+// colour is a vertical green->yellow->orange->red gradient driven by intensity.
+export const HEATMAP = {
+  numBands: 40, // internal perceptual bands (left=low freq -> right=high). Never shown as columns.
+  minWidthPx: 1024, // desktop-only: never rendered/updated below this width
+  maxHeightPx: 100, // runtime (60 / 80 / 100) — hard clamp
+  intensity: 1.0, // runtime 0.5/1/1.5/2 — scales the field height
+  opacity: 0.52, // runtime 0.25/0.40/0.55/0.70 master opacity
+  smoothing: 2, // runtime spatial smoothing 0=LOW 1=MEDIUM 2=HIGH (band-blur radius)
+  smoothRadius: [1, 2, 4] as const, // band-blur radius per smoothing level
+  // Vertical thermal palette (reference): green -> lime -> yellow -> orange -> red
+  colorLow: [0x28 / 255, 0xff / 255, 0x52 / 255] as [number, number, number], // #28FF52
+  colorLowMid: [0x9d / 255, 0xff / 255, 0x36 / 255] as [number, number, number], // #9DFF36
+  colorMid: [0xf2 / 255, 0xd3 / 255, 0x37 / 255] as [number, number, number], // #F2D337
+  colorHigh: [0xff / 255, 0x7a / 255, 0x24 / 255] as [number, number, number], // #FF7A24
+  colorPeak: [0xff / 255, 0x00 / 255, 0x04 / 255] as [number, number, number], // #FF0004
+  topFadeStart: 0.82, // upper dissolve only near the very top (keeps peaks vivid)
+  surfaceSoftPx: 9, // soft thickness of the undulating top surface
+  heatShift: 0.13, // heatProgress pushes palette toward orange/red by up to +13%
+  // Frequency mapping — perceptual/log (fractions of binCount).
+  loBinFrac: 0.001,
+  hiBinFrac: 0.42,
+  // Per-band temporal dynamics (viscous). Bass rises a touch faster.
+  attackRate: 9, // ~110ms
+  releaseRate: 2.2, // ~450ms
+  attackRateBass: 12, // bass a bit snappier
+  peakHoldMs: 90, // slight peak persistence
+  noiseGate: 0.045,
+  perceptualExp: 0.82,
+  normDecay: 0.9992,
+  normFloor: 0.08,
+  normHeadroom: 1.3,
+};
+
+/** Runtime setters for the debug panel's heatmap controls. */
+export function setHeatmapIntensity(v: number): void {
+  HEATMAP.intensity = v;
+}
+export function setHeatmapMaxHeight(v: number): void {
+  HEATMAP.maxHeightPx = v;
+}
+export function setHeatmapSmoothing(v: number): void {
+  HEATMAP.smoothing = v;
+}
+export function setHeatmapOpacity(v: number): void {
+  HEATMAP.opacity = v;
+}
+
 // ------------------------------------------------------- GLOBAL SAFETY CLAMPS (§3)
 // finalValue = base + heatOffset + fieldOffset + audioOffset, hard-capped here so
 // the sum of all effects at maximum still reads premium and legible.
@@ -122,4 +173,17 @@ export const telemetry = {
   fps: 0,
   audioState: "none" as string,
   playing: false,
+  // Desktop spectral heatmap
+  hmSub: 0, // energy 0..1 per broad group
+  hmBass: 0,
+  hmMid: 0,
+  hmHigh: 0,
+  hmPeak: 0, // normalized peak band (0..1)
+  hmMaxHeightPx: 0, // tallest column in px (<= maxHeightPx)
+  hmBands: 40,
+  hmIntensity: 1,
+  hmMaxCfg: 100,
+  hmSmoothing: 2,
+  hmOpacity: 0.52,
+  hmActive: false, // rendered right now (desktop + on + audio)
 };

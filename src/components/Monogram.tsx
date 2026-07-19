@@ -2,9 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./Monogram.module.css";
-import { CLAMP, EFFECTS, FIELD, PULSE, telemetry } from "@/effects/effectsConfig";
+import {
+  CLAMP,
+  EFFECTS,
+  FIELD,
+  HEATMAP,
+  PULSE,
+  telemetry,
+} from "@/effects/effectsConfig";
 import {
   getBands as getAudioBands,
+  getEnv as getAudioEnv,
+  getHeatmap as getAudioHeatmap,
   setExternalDriver as setAudioDriver,
   tick as audioTick,
 } from "@/effects/audioReactive";
@@ -82,6 +91,19 @@ const MARQUEE_FRAGMENT = /* glsl */ `
   uniform float uFieldGlow;   // background halo opacity (<= ~0.05)
   uniform vec3 uFieldColor;   // halo tint (cold #B0C7FD -> red on heat)
   uniform float uAudioBg;     // Sonic Pulse background micro-pulse (<= ~0.03)
+  // Desktop spectral heatmap — continuous thermal field (env 0 -> skipped) ------
+  uniform sampler2D uHmTex;   // band energies in .r (0..1), LINEAR filtered
+  uniform float uHmMaxH;      // max field height, physical px (per pass)
+  uniform float uHmSurfaceSoft; // soft surface thickness, physical px (per pass)
+  uniform float uHmEnv;       // fade envelope (0 -> skip)
+  uniform float uHmOpacity;   // master opacity
+  uniform float uHmTopFade;   // vertical position where the upper dissolve starts
+  uniform float uHmHeatShift; // heatProgress push toward orange/red (0..~0.13)
+  uniform vec3 uHmC0;         // palette: low energy (green)
+  uniform vec3 uHmC1;         // low-mid (lime)
+  uniform vec3 uHmC2;         // mid (yellow)
+  uniform vec3 uHmC3;         // high (orange)
+  uniform vec3 uHmC4;         // peak (red)
   void main() {
     vec2 p = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y); // y-down
     float ang = radians(152.689);
@@ -115,6 +137,46 @@ const MARQUEE_FRAGMENT = /* glsl */ `
       float ty = (pc.y - bandTop) / uBandH;
       float a = texture2D(uText, vec2(tx, ty)).a;
       col = mix(col, vec3(1.0), a);
+    }
+
+    // --- desktop spectral heatmap: one continuous thermal field ---------------
+    // Drawn ON the same opaque background plane (above the marquee, below the
+    // monogram, refracted through the glass via the RT). No bars/lines: a
+    // LINEAR-sampled, extra-blurred height field with a vertical green->red
+    // thermal gradient and a soft undulating top.
+    if (uHmEnv > 0.001) {
+      float distBottom = uResolution.y - p.y; // physical px from the viewport bottom
+      if (distBottom < uHmMaxH + uHmSurfaceSoft * 3.0) {
+        float nx = clamp(p.x / uResolution.x, 0.0, 1.0); // 0=low freq .. 1=high freq
+        // Continuous energy at nx: LINEAR texture + a small horizontal blur so no
+        // single band is recognisable (on top of the JS spatial blur).
+        float e =
+            texture2D(uHmTex, vec2(nx, 0.5)).r * 0.40
+          + texture2D(uHmTex, vec2(clamp(nx - 0.013, 0.0, 1.0), 0.5)).r * 0.24
+          + texture2D(uHmTex, vec2(clamp(nx + 0.013, 0.0, 1.0), 0.5)).r * 0.24
+          + texture2D(uHmTex, vec2(clamp(nx - 0.030, 0.0, 1.0), 0.5)).r * 0.06
+          + texture2D(uHmTex, vec2(clamp(nx + 0.030, 0.0, 1.0), 0.5)).r * 0.06;
+        float h = e * uHmMaxH;                              // column height (px)
+        float t = clamp(distBottom / uHmMaxH, 0.0, 1.0);    // 0 bottom -> 1 top of band
+        // soft undulating surface (no hard top edge, no baseline when h ~ 0)
+        float surface = 1.0 - smoothstep(h - uHmSurfaceSoft, h + uHmSurfaceSoft, distBottom);
+        float present = smoothstep(uHmSurfaceSoft * 0.2, uHmSurfaceSoft * 0.7, h);
+        // vertical thermal gradient by absolute height (red only at tall peaks),
+        // nudged toward red by heatProgress without losing the green.
+        float ct = clamp(t + uHmHeatShift * smoothstep(0.25, 1.0, t), 0.0, 1.0);
+        vec3 c = mix(uHmC0, uHmC1, smoothstep(0.0, 0.22, ct));
+        c = mix(c, uHmC2, smoothstep(0.22, 0.42, ct));   // -> yellow
+        c = mix(c, uHmC3, smoothstep(0.42, 0.64, ct));   // -> orange
+        c = mix(c, uHmC4, smoothstep(0.64, 0.9, ct));    // -> red at tall peaks
+        // opacity: master * gentle vertical profile * upper dissolve * energy
+        float vProfile = mix(0.85, 1.12, t);
+        float upper = 1.0 - smoothstep(uHmTopFade, 1.0, t);
+        float energyBoost = 0.62 + 0.38 * e;
+        // subtle ordered dither to keep the gradient banding-free
+        float dither = (fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.02;
+        float alpha = surface * present * uHmOpacity * vProfile * upper * energyBoost * uHmEnv;
+        col = mix(col, c, clamp(alpha + dither * alpha, 0.0, 1.0));
+      }
     }
     gl_FragColor = vec4(col, 1.0);
   }
@@ -199,6 +261,21 @@ export default function Monogram() {
       );
       blankTex.needsUpdate = true;
 
+      // Heatmap band-energy data texture (BANDS x 1, R channel), LINEAR filtered
+      // so the field is continuous between bands. One reused buffer uploaded per
+      // frame — the single visual source for the thermal field (no DOM).
+      const hmData = new Uint8Array(HEATMAP.numBands * 4);
+      const hmTex = new THREE.DataTexture(
+        hmData,
+        HEATMAP.numBands,
+        1,
+        THREE.RGBAFormat,
+      );
+      hmTex.minFilter = THREE.LinearFilter;
+      hmTex.magFilter = THREE.LinearFilter;
+      hmTex.wrapS = THREE.ClampToEdgeWrapping;
+      hmTex.needsUpdate = true;
+
       // Desktop: 330px scaled proportionally (=330 at 1728). Mobile: exact 64px.
       const marqueeScale = () =>
         vw <= 767 ? 64 / MARQUEE_FONT_PX : Math.min(1, vw / 1728);
@@ -222,6 +299,18 @@ export default function Monogram() {
           uFieldGlow: { value: 0 },
           uFieldColor: { value: new THREE.Color(0xb0c7fd) },
           uAudioBg: { value: 0 },
+          uHmTex: { value: hmTex },
+          uHmMaxH: { value: 0 },
+          uHmSurfaceSoft: { value: 10 },
+          uHmEnv: { value: 0 },
+          uHmOpacity: { value: HEATMAP.opacity },
+          uHmTopFade: { value: HEATMAP.topFadeStart },
+          uHmHeatShift: { value: 0 },
+          uHmC0: { value: new THREE.Color().fromArray(HEATMAP.colorLow) },
+          uHmC1: { value: new THREE.Color().fromArray(HEATMAP.colorLowMid) },
+          uHmC2: { value: new THREE.Color().fromArray(HEATMAP.colorMid) },
+          uHmC3: { value: new THREE.Color().fromArray(HEATMAP.colorHigh) },
+          uHmC4: { value: new THREE.Color().fromArray(HEATMAP.colorPeak) },
         },
         vertexShader: MARQUEE_VERTEX,
         fragmentShader: MARQUEE_FRAGMENT,
@@ -731,6 +820,12 @@ export default function Monogram() {
         u.uGroupW.value = ((groupWorldW * marqueeScale()) / vw) * resW;
         u.uBandH.value = ((MARQUEE_BAND_H * marqueeScale()) / vh) * resH;
         u.uOffset.value = marqueeOffsetFrac * (u.uGroupW.value as number);
+        // Heatmap sizes are physical px, so they must scale with THIS pass's
+        // resolution to render + refract identically. Height is the runtime
+        // 60/80/100px config, strongly reduced under prefers-reduced-motion.
+        const rmScale = prefersReducedMotion ? 0.2 : 1;
+        u.uHmMaxH.value = ((HEATMAP.maxHeightPx * rmScale) / vh) * resH;
+        u.uHmSurfaceSoft.value = Math.max(2, (HEATMAP.surfaceSoftPx / vh) * resH);
       };
 
       const renderFrame = () => {
@@ -938,6 +1033,34 @@ export default function Monogram() {
           gu.uFieldSpec.value = FIELD.specularBoostMax;
           gu.uAudioRefract.value = audioRefract;
           gu.uAudioSpec.value = audioSpec;
+        }
+
+        // --- Desktop spectral heatmap (continuous thermal field) -------------
+        // Desktop-only (>=1024px), audio-driven; upload the band energies to the
+        // reused LINEAR DataTexture (single visual source, refracted via the RT).
+        {
+          const mu = marqueeMaterial.uniforms;
+          const hmOn =
+            EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP && vw >= HEATMAP.minWidthPx;
+          const hmEnv = hmOn ? getAudioEnv() : 0;
+          mu.uHmEnv.value = hmEnv;
+          if (hmEnv > 0.001) {
+            const field = getAudioHeatmap();
+            for (let i = 0; i < HEATMAP.numBands; i++) {
+              hmData[i * 4] = Math.min(255, field[i] * HEATMAP.intensity * 255);
+            }
+            hmTex.needsUpdate = true;
+            mu.uHmOpacity.value = HEATMAP.opacity;
+            mu.uHmTopFade.value = HEATMAP.topFadeStart;
+            // heatProgress nudges the palette toward red WITHOUT killing the green.
+            mu.uHmHeatShift.value = smoothstep01(heat) * HEATMAP.heatShift;
+          }
+          telemetry.hmIntensity = HEATMAP.intensity;
+          telemetry.hmMaxCfg = HEATMAP.maxHeightPx;
+          telemetry.hmSmoothing = HEATMAP.smoothing;
+          telemetry.hmOpacity = HEATMAP.opacity;
+          telemetry.hmMaxHeightPx =
+            telemetry.hmPeak * HEATMAP.maxHeightPx * HEATMAP.intensity;
         }
 
         // Debug telemetry (read by the ?debugEffects=1 panel; not visual).
@@ -1177,6 +1300,7 @@ export default function Monogram() {
         canvas.removeEventListener("pointercancel", onPointerUp);
         marqueeTexPromise.then((tex) => tex?.dispose()).catch(() => {});
         blankTex.dispose();
+        hmTex.dispose();
         for (const gm of glitchMats) gm.dispose();
         geometry.dispose();
         (mesh.material as import("three").Material).dispose();
