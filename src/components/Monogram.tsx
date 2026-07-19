@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import styles from "./Monogram.module.css";
+import { CLAMP, EFFECTS, FIELD, PULSE, telemetry } from "@/effects/effectsConfig";
+import {
+  getBands as getAudioBands,
+  setExternalDriver as setAudioDriver,
+  tick as audioTick,
+} from "@/effects/audioReactive";
 
 /* ------------------------------------------------------------------
    Home centre — REAL extruded WebGL glass monogram + a "GUIDED BY
@@ -67,6 +73,15 @@ const MARQUEE_FRAGMENT = /* glsl */ `
   uniform float uGroupW;
   uniform float uBandH;
   uniform vec3 uDarkStop; // heat-driven second stop: #000000 -> #580001
+  // Frequency Field (all 0 when the feature is off -> identical output) ---------
+  uniform vec2 uFieldPos;     // normalized, y-down (0..1)
+  uniform float uFieldStrength;
+  uniform float uFieldRadius;
+  uniform float uFieldDisp;   // local displacement, as a fraction of resolution
+  uniform float uFieldScale;  // local scale variation (e.g. 0.025)
+  uniform float uFieldGlow;   // background halo opacity (<= ~0.05)
+  uniform vec3 uFieldColor;   // halo tint (cold #B0C7FD -> red on heat)
+  uniform float uAudioBg;     // Sonic Pulse background micro-pulse (<= ~0.03)
   void main() {
     vec2 p = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y); // y-down
     float ang = radians(152.689);
@@ -75,11 +90,29 @@ const MARQUEE_FRAGMENT = /* glsl */ `
     float halfLen = (abs(uResolution.x * dir.x) + abs(uResolution.y * dir.y)) * 0.5;
     float t = dot(p - center, dir) / (2.0 * halfLen) + 0.5;
     float u = clamp((t - 0.17843) / (0.8303 - 0.17843), 0.0, 1.0);
+
+    // Field influence: soft radial falloff around the pointer/touch (aspect
+    // corrected so the radius is circular). Zero when uFieldStrength is 0.
+    vec2 suv = p / uResolution;
+    vec2 dd = suv - uFieldPos;
+    dd.x *= uResolution.x / uResolution.y;
+    float infl = uFieldStrength * exp(-dot(dd, dd) / (uFieldRadius * uFieldRadius));
+
     vec3 col = mix(vec3(44.0, 52.0, 62.0) / 255.0, uDarkStop, u);
+    col *= (1.0 + uAudioBg);                    // audio background micro-pulse
+    col += uFieldColor * (infl * uFieldGlow);   // subtle field halo
+
     float bandTop = (uResolution.y - uBandH) * 0.5;
     if (p.y >= bandTop && p.y <= bandTop + uBandH) {
-      float tx = fract((p.x + uOffset) / uGroupW);
-      float ty = (p.y - bandTop) / uBandH;
+      // Local field distortion of the sampled text: gentle displacement toward
+      // the field + a small local scale. Never stops the scroll (uOffset).
+      vec2 pc = p;
+      vec2 wdir = normalize(dd + 1e-5);
+      pc += wdir * (infl * uFieldDisp) * uResolution;
+      vec2 centerPx = uFieldPos * uResolution;
+      pc = centerPx + (pc - centerPx) * (1.0 + infl * uFieldScale);
+      float tx = fract((pc.x + uOffset) / uGroupW);
+      float ty = (pc.y - bandTop) / uBandH;
       float a = texture2D(uText, vec2(tx, ty)).a;
       col = mix(col, vec3(1.0), a);
     }
@@ -181,6 +214,14 @@ export default function Monogram() {
           uGroupW: { value: 1 },
           uBandH: { value: MARQUEE_BAND_H * pr() },
           uDarkStop: { value: new THREE.Vector3(0, 0, 0) },
+          uFieldPos: { value: new THREE.Vector2(0.5, 0.5) },
+          uFieldStrength: { value: 0 },
+          uFieldRadius: { value: FIELD.radius },
+          uFieldDisp: { value: 0 },
+          uFieldScale: { value: 0 },
+          uFieldGlow: { value: 0 },
+          uFieldColor: { value: new THREE.Color(0xb0c7fd) },
+          uAudioBg: { value: 0 },
         },
         vertexShader: MARQUEE_VERTEX,
         fragmentShader: MARQUEE_FRAGMENT,
@@ -393,6 +434,14 @@ export default function Monogram() {
         uniform float uFresnelStrength;
         uniform float uSpecularStrength;
         uniform vec3 uLightDirection;
+        // Frequency Field + Sonic Pulse (all 0 when off -> identical output) -----
+        uniform vec2 uFieldPosG;      // normalized, y-up (matches vScreenUV)
+        uniform float uFieldStrength;
+        uniform float uFieldRadius;
+        uniform float uFieldRefract;  // local refraction/dispersion boost
+        uniform float uFieldSpec;     // local specular boost
+        uniform float uAudioRefract;  // global refraction breath from bass/mid
+        uniform float uAudioSpec;     // global specular lift from mids
         varying vec2 vScreenUV;
         varying vec3 vViewNormal;
         varying vec3 vLocalPos;
@@ -412,7 +461,15 @@ export default function Monogram() {
           // so the FLAT front face (N.xy ~ 0) still bends the marquee.
           vec2 wave = waveField(vScreenUV, normalize(vLocalPos + 1.0), uTime);
           vec2 refractDir = N.xy + wave * 0.85;
-          vec2 uv = vScreenUV + refractDir * uRefractionStrength;
+
+          // Local field lensing + global audio breath -> a multiplier on the
+          // refraction & dispersion (1.0 when both are off). Purely additive to
+          // the approved base: it only ever increases density near the field.
+          vec2 gdd = vScreenUV - uFieldPosG;
+          gdd.x *= uResolution.x / uResolution.y;
+          float inflG = uFieldStrength * exp(-dot(gdd, gdd) / (uFieldRadius * uFieldRadius));
+          float refractMul = 1.0 + inflG * uFieldRefract + uAudioRefract;
+          vec2 uv = vScreenUV + refractDir * uRefractionStrength * refractMul;
 
           float b = uBlurStrength;
           vec3 col = texture2D(tBackground, uv).rgb;
@@ -436,7 +493,7 @@ export default function Monogram() {
 
           ${
             dispersion
-              ? `float ca = uChromaticAberration;
+              ? `float ca = uChromaticAberration * refractMul;
           col.r = mix(col.r, texture2D(tBackground, uv + refractDir * ca).r, 0.7);
           col.b = mix(col.b, texture2D(tBackground, uv - refractDir * ca).b, 0.7);`
               : ``
@@ -449,7 +506,8 @@ export default function Monogram() {
 
           vec3 L = normalize(uLightDirection);
           vec3 H = normalize(L + V);
-          float spec = pow(max(dot(N, H), 0.0), 48.0) * uSpecularStrength;
+          float spec = pow(max(dot(N, H), 0.0), 48.0) * uSpecularStrength
+            * (1.0 + inflG * uFieldSpec + uAudioSpec);
           col += spec * vec3(1.0);
 
           gl_FragColor = vec4(col, 1.0);
@@ -492,6 +550,13 @@ export default function Monogram() {
             uLightDirection: {
               value: new THREE.Vector3(0.3, 0.5, 1.0).normalize(),
             },
+            uFieldPosG: { value: new THREE.Vector2(0.5, 0.5) },
+            uFieldStrength: { value: 0 },
+            uFieldRadius: { value: FIELD.radius },
+            uFieldRefract: { value: 0 },
+            uFieldSpec: { value: 0 },
+            uAudioRefract: { value: 0 },
+            uAudioSpec: { value: 0 },
             uQualityTier: { value: glassTierOrder.indexOf(tier) },
           },
           vertexShader: GLASS_VERTEX,
@@ -607,19 +672,45 @@ export default function Monogram() {
       }
       let glitchStart = 0;
 
+      // Base uniform scale from the fit; Sonic Pulse multiplies this per frame
+      // (mesh.scale = baseScaleValue * (1 + audioScale)). Also the on-screen
+      // vertical centre of the monogram (0..1, y-down) used to aim the parallax.
+      let baseScaleValue = 1;
+      let monoCenterY = 0.5;
       const applyFit = () => {
         if (vw <= 767) {
           // Mobile: ~467px tall near the top (Figma), so the marquee reads on
           // the sides. Proportional to height; centred horizontally.
           const targetH = Math.min(vh * 0.575, vh - 240);
-          mesh.scale.setScalar(targetH / naturalHeight);
+          baseScaleValue = targetH / naturalHeight;
+          mesh.scale.setScalar(baseScaleValue);
           mesh.position.y = vh / 2 - (vh * 0.15 + targetH / 2); // top ~122@812
         } else {
-          mesh.scale.setScalar((vh - MARGIN * 2) / naturalHeight);
+          baseScaleValue = (vh - MARGIN * 2) / naturalHeight;
+          mesh.scale.setScalar(baseScaleValue);
           mesh.position.y = 0;
         }
+        // world y -> normalized screen y (y-down): screen top = vh/2.
+        monoCenterY = 0.5 - mesh.position.y / vh;
       };
       applyFit();
+
+      // --- Frequency Field state (pointer/touch) -----------------------------
+      // Damped, frame-rate-independent field. Position eases toward the pointer;
+      // strength ramps on movement and decays to 0 (~decayMs) when it holds
+      // still. Everything is 0 when the flag is off or under reduced motion.
+      // Reduced motion disables it entirely (static); the ENABLE flag is read
+      // LIVE every frame so the debug panel can toggle it at runtime.
+      const fieldAllowed = !prefersReducedMotion;
+      let fieldTX = 0.5;
+      let fieldTY = 0.5; // target (y-down, normalized)
+      let fieldX = 0.5;
+      let fieldY = 0.5; // damped
+      let fieldStrength = 0; // 0..1
+      let fieldLastX = 0.5;
+      let fieldLastY = 0.5;
+      let scrollRotY = mesh.rotation.y; // authoritative scroll/inertia rotation
+      let fpsSmooth = 60;
 
       // --- Loop (continuous: the marquee scrolls every frame) ----------------
       let angularVelocity = 0; // rad/s
@@ -704,7 +795,12 @@ export default function Monogram() {
       };
 
       const loop = (now: number) => {
-        const dt = Math.min(64, now - lastFrame);
+        // Clamp dt to [0, 64]ms. The MAX guards long stalls; the MIN guards a
+        // NEGATIVE gap — the first rAF timestamp after a route remount can be
+        // earlier than the performance.now() captured when the loop was armed,
+        // and a negative dt would run the heat COOLDOWN in reverse (heating the
+        // monogram on mount) and jump the marquee/rotation backwards.
+        const dt = Math.min(64, Math.max(0, now - lastFrame));
         lastFrame = now;
         const dtSec = dt / 1000;
 
@@ -712,7 +808,10 @@ export default function Monogram() {
         marqueeOffsetFrac = (marqueeOffsetFrac + dt / MARQUEE_CYCLE_MS) % 1;
 
         // --- Rotation inertia (frame-rate independent) -----------------------
-        mesh.rotation.y += angularVelocity * dtSec;
+        // Priority 1: scroll/inertia is authoritative and accumulates here; the
+        // Frequency Field only adds a small parallax offset below, never touches
+        // scrollRotY or the velocity.
+        scrollRotY += angularVelocity * dtSec;
         angularVelocity *= Math.exp(-DAMPING_RATE * dtSec); // exponential friction
         if (angularVelocity > MAX_ANGULAR_VELOCITY)
           angularVelocity = MAX_ANGULAR_VELOCITY;
@@ -747,6 +846,109 @@ export default function Monogram() {
         if (glassShader && !prefersReducedMotion) {
           glassShader.uniforms.uTime.value = now * 0.001;
         }
+
+        // --- Sonic Pulse: drive the single audio engine + read the bands ------
+        // The Monogram loop is the one rAF driver while it is mounted.
+        audioTick(dtSec);
+        const pulseOn = EFFECTS.ENABLE_SONIC_PULSE && !prefersReducedMotion;
+        const bands = pulseOn
+          ? getAudioBands()
+          : { bass: 0, mid: 0, high: 0 };
+
+        // --- Frequency Field: damped position + decaying strength -------------
+        const fieldActive = fieldAllowed && EFFECTS.ENABLE_FREQUENCY_FIELD;
+        if (fieldActive) {
+          fieldX += (fieldTX - fieldX) * (1 - Math.exp(-FIELD.pointerDamping * dtSec));
+          fieldY += (fieldTY - fieldY) * (1 - Math.exp(-FIELD.pointerDamping * dtSec));
+          fieldStrength *= Math.exp((-dtSec * 1000) / FIELD.decayMs);
+          if (fieldStrength < 0.0008) fieldStrength = 0;
+        } else if (fieldStrength !== 0) {
+          fieldStrength = 0; // settle to base immediately when disabled
+        }
+        const sEff =
+          fieldStrength *
+          (isMobile ? FIELD.mobileStrength : FIELD.desktopStrength);
+
+        // --- Compose additive offsets (§3) ------------------------------------
+        // finalValue = base + heatOffset + fieldOffset + audioOffset.
+        // Audio offsets scale by the runtime intensity (OFF/1x/2.5x/4x) and are
+        // hard-clamped per effect; 0 when the pulse is off / paused (bands -> 0).
+        const si = pulseOn ? PULSE.sonicIntensity : 0;
+        const audioRefract = Math.min(
+          PULSE.refractPulseClamp,
+          (bands.bass * 0.5 + bands.mid * 0.5) * PULSE.refractPulseBase * si,
+        );
+        const audioBg = Math.min(
+          PULSE.bgPulseClamp,
+          bands.bass * PULSE.bgPulseBase * si,
+        );
+        const audioScale = Math.min(
+          PULSE.scalePulseClamp,
+          bands.bass * PULSE.scalePulseBase * si,
+        );
+        const audioSpec = Math.min(
+          PULSE.specPulseClamp,
+          bands.mid * PULSE.specPulseBase * si,
+        );
+        const audioDepth = Math.min(
+          PULSE.depthClamp,
+          bands.bass * PULSE.depthBase * si,
+        );
+
+        // Monogram: scroll rotation (authoritative) + tiny field parallax.
+        const maxRad = (FIELD.monogramRotMaxDeg * Math.PI) / 180;
+        const parYaw = Math.max(
+          -CLAMP.parallaxRad,
+          Math.min(CLAMP.parallaxRad, (fieldX - 0.5) * 2 * maxRad * sEff),
+        );
+        const parPitch = Math.max(
+          -CLAMP.parallaxRad,
+          Math.min(CLAMP.parallaxRad, -(fieldY - monoCenterY) * 2 * maxRad * sEff),
+        );
+        mesh.rotation.y = scrollRotY + parYaw;
+        mesh.rotation.x = parPitch;
+        mesh.scale.setScalar(baseScaleValue * (1 + audioScale));
+        mesh.position.z = audioDepth; // bass "mass" push (ortho -> subtle)
+
+        // Marquee uniforms (Frequency Field distortion + glow + audio bg pulse).
+        {
+          const mu = marqueeMaterial.uniforms;
+          mu.uFieldStrength.value = sEff;
+          (mu.uFieldPos.value as import("three").Vector2).set(fieldX, fieldY);
+          mu.uFieldDisp.value =
+            ((isMobile
+              ? FIELD.marqueeDispMaxPxMobile
+              : FIELD.marqueeDispMaxPxDesktop) /
+              vw) *
+            sEff;
+          mu.uFieldScale.value = FIELD.marqueeScaleMax * sEff;
+          mu.uFieldGlow.value = Math.min(CLAMP.bgGlow, FIELD.bgGlowMax) * sEff;
+          (mu.uFieldColor.value as import("three").Color).copy(heatColor);
+          mu.uAudioBg.value = audioBg;
+        }
+        // Glass uniforms (local refraction/specular lensing + audio breath).
+        if (glassShader) {
+          const gu = glassShader.uniforms;
+          gu.uFieldStrength.value = sEff;
+          (gu.uFieldPosG.value as import("three").Vector2).set(
+            fieldX,
+            1 - fieldY,
+          );
+          gu.uFieldRefract.value = FIELD.refractionBoostMax;
+          gu.uFieldSpec.value = FIELD.specularBoostMax;
+          gu.uAudioRefract.value = audioRefract;
+          gu.uAudioSpec.value = audioSpec;
+        }
+
+        // Debug telemetry (read by the ?debugEffects=1 panel; not visual).
+        fpsSmooth = fpsSmooth * 0.92 + (dtSec > 0 ? 1 / dtSec : 60) * 0.08;
+        telemetry.fieldStrength = sEff;
+        telemetry.bgOffset = audioBg;
+        telemetry.refractOffset = audioRefract;
+        telemetry.monoScale = 1 + audioScale;
+        telemetry.heat = heat;
+        telemetry.dpr = pr();
+        telemetry.fps = fpsSmooth;
 
         renderFrame();
 
@@ -798,7 +1000,7 @@ export default function Monogram() {
         const nd = normalizeWheel(e);
         if (prefersReducedMotion) {
           // No prolonged inertia under reduced motion: a small direct nudge.
-          mesh.rotation.y += nd * REDUCED_MOTION_ROTATE;
+          scrollRotY += nd * REDUCED_MOTION_ROTATE;
           return;
         }
         // Impulse: a fast scroll adds more; opposite scroll brakes then reverses;
@@ -836,7 +1038,7 @@ export default function Monogram() {
         lastPointerT = t;
         lastInputTime = t; // drag also feeds the heat timer
         const deltaRot = dy * DRAG_SENSITIVITY;
-        mesh.rotation.y += deltaRot; // direct 1:1 manipulation
+        scrollRotY += deltaRot; // direct 1:1 manipulation (composed in the loop)
         // Carry the instantaneous drag speed as velocity so release keeps inertia.
         let v = deltaRot / dtp;
         if (v > MAX_ANGULAR_VELOCITY) v = MAX_ANGULAR_VELOCITY;
@@ -852,6 +1054,32 @@ export default function Monogram() {
       canvas.addEventListener("pointermove", onPointerMove);
       canvas.addEventListener("pointerup", onPointerUp);
       canvas.addEventListener("pointercancel", onPointerUp);
+
+      // --- Frequency Field input (desktop pointer + mobile touch) ------------
+      // Passive, window-level, read-only: it never calls preventDefault, so
+      // scroll, taps, links, menu, player and native gestures are untouched. It
+      // only reads the pointer position and bumps the field strength on real
+      // movement; the field then eases + decays in the loop.
+      const onFieldPointer = (e: PointerEvent) => {
+        if (!fieldAllowed || !EFFECTS.ENABLE_FREQUENCY_FIELD) return;
+        const nx = e.clientX / window.innerWidth;
+        const ny = e.clientY / window.innerHeight;
+        // movement magnitude (normalized) drives the strength ramp
+        const moved = Math.hypot(nx - fieldLastX, ny - fieldLastY);
+        fieldLastX = nx;
+        fieldLastY = ny;
+        fieldTX = nx;
+        fieldTY = ny;
+        fieldStrength = Math.min(1, fieldStrength + moved * 6);
+      };
+      // Attach whenever motion is allowed; the handler + loop gate on the live
+      // ENABLE flag so the debug panel can toggle the field on/off at runtime.
+      if (fieldAllowed) {
+        window.addEventListener("pointermove", onFieldPointer, { passive: true });
+      }
+
+      // Sonic Pulse: this loop is the single rAF driver while mounted.
+      setAudioDriver(true);
 
       // --- Resize ------------------------------------------------------------
       const onResize = () => {
@@ -936,6 +1164,10 @@ export default function Monogram() {
         window.removeEventListener("resize", onResize);
         window.removeEventListener("orientationchange", onResizeCoalesced);
         window.visualViewport?.removeEventListener("resize", onResizeCoalesced);
+        window.removeEventListener("pointermove", onFieldPointer);
+        // Hand the single audio rAF back to the engine (player bar keeps working
+        // on routes without the WebGL scene).
+        setAudioDriver(false);
         document.removeEventListener("visibilitychange", onVisibility);
         canvas.removeEventListener("webglcontextlost", onContextLost);
         canvas.removeEventListener("webglcontextrestored", onContextRestored);
