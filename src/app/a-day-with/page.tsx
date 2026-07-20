@@ -1,3 +1,4 @@
+import PortalMain from "@/components/PortalMain";
 import styles from "./a-day-with.module.css";
 
 const INTRO =
@@ -5,7 +6,7 @@ const INTRO =
 
 export default function ADayWithPage() {
   return (
-    <main className={styles.content}>
+    <PortalMain className={styles.content}>
       <h1 className={styles.title}>A DAY WITH</h1>
 
       <div className={styles.block}>
@@ -57,6 +58,6 @@ export default function ADayWithPage() {
           </div>
         </div>
       </div>
-    </main>
+    </PortalMain>
   );
 }

@@ -18,6 +18,11 @@ import {
   setExternalDriver as setAudioDriver,
   tick as audioTick,
 } from "@/effects/audioReactive";
+import {
+  currentVisual as portalVisual,
+  getPortalState,
+  PORTAL,
+} from "@/effects/portalTransition";
 
 /* ------------------------------------------------------------------
    Home centre — REAL extruded WebGL glass monogram + a "GUIDED BY
@@ -189,7 +194,14 @@ const MARQUEE_VERTEX = /* glsl */ `
   }
 `;
 
-export default function Monogram() {
+export default function Monogram({
+  initialOpacity = 1,
+}: {
+  // Route-correct initial canvas opacity (1 Home / 0 internal desktop) so the
+  // persistent scene never flashes the fallback on internal direct-load. The
+  // portal loop drives it live thereafter.
+  initialOpacity?: number;
+}) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ready, setReady] = useState(false);
@@ -198,6 +210,10 @@ export default function Monogram() {
     const canvas = canvasRef.current;
     const stage = stageRef.current;
     if (!canvas || !stage) return;
+
+    // Route-correct initial coverage so the persistent scene is invisible on
+    // internal desktop routes from the very first paint (the loop drives it after).
+    stage.style.opacity = String(initialOpacity);
 
     const prefersReducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -725,6 +741,22 @@ export default function Monogram() {
       const mesh = new THREE.Mesh(geometry, meshMaterial);
       scene.add(mesh);
 
+      // --- Portal cavity target marker (debug only) --------------------------
+      // Small dot at the aim point, shown ONLY with ?debugEffects=1 + TARGET on.
+      const portalMarker = new THREE.Mesh(
+        new THREE.SphereGeometry(7, 16, 16),
+        new THREE.MeshBasicMaterial({
+          color: 0xff0044,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.9,
+          toneMapped: false,
+        }),
+      );
+      portalMarker.renderOrder = 999;
+      portalMarker.visible = false;
+      scene.add(portalMarker);
+
       // --- Thermal (chromatic) state -----------------------------------------
       // ONE reusable colour is lerped between cold and hot in HSL, so the sweep
       // travels blue -> violet -> pink -> red (no dirty greys). `heat` is the
@@ -761,6 +793,10 @@ export default function Monogram() {
       const CHROMA_BOOST = profile.chroma * 1.5; // extra separation at full heat
       let heat = 0; // 0..1 linear thermal level
       let appliedHeat = -1; // last heat written to the material (skips redundant work)
+      // Heat-applied blur/chroma bases — the portal dive adds transient
+      // refraction/blur/dispersion ON TOP of these each frame (reset when idle).
+      let heatBlurBase = baseBlur;
+      let heatChromaBase = baseChroma;
       const smoothstep01 = (x: number) => x * x * (3 - 2 * x);
       const applyHeat = () => {
         if (heat === appliedHeat) return;
@@ -783,11 +819,12 @@ export default function Monogram() {
           // 11% look -> ~22% look: double the tint's visual weight at full heat.
           glassShader.uniforms.uTintStrength.value = baseTint * (1 + eased);
           // Blur ONLY the monogram's own optical content (its refraction taps).
-          glassShader.uniforms.uBlurStrength.value = baseBlur + frost * BLUR_MAX_ADD;
+          heatBlurBase = baseBlur + frost * BLUR_MAX_ADD;
+          glassShader.uniforms.uBlurStrength.value = heatBlurBase;
           // Dynamic RGB boost rides on top of the always-on baseline; when heat
           // decays the boost unwinds to baseChroma, so the separation persists.
-          glassShader.uniforms.uChromaticAberration.value =
-            baseChroma + eased * CHROMA_BOOST;
+          heatChromaBase = baseChroma + eased * CHROMA_BOOST;
+          glassShader.uniforms.uChromaticAberration.value = heatChromaBase;
         } else if (!useCustomGlass) {
           const m = meshMaterial as import("three").MeshPhysicalMaterial;
           m.color.copy(heatColor);
@@ -887,6 +924,9 @@ export default function Monogram() {
       let rafId = 0;
       let lastFrame = performance.now();
       let marqueeOffsetFrac = 0; // 0..1, resolution-independent scroll phase
+      // Portal coverage state (avoid per-frame DOM writes / redundant work).
+      let portalLastPresence = -1;
+      let portalLastActive = false;
 
       // Set the marquee uniforms for a given target resolution + scale so PASS 1
       // (render target) and PASS 2 (screen) produce an IDENTICAL normalised
@@ -1036,6 +1076,11 @@ export default function Monogram() {
         // --- Sonic Pulse: drive the single audio engine + read the bands ------
         // The Monogram loop is the one rAF driver while it is mounted.
         audioTick(dtSec);
+        // --- Portal transition: transient dive offsets (idle on mobile / when
+        // inactive). Read ONCE per frame; it attenuates field/sonic, dives the
+        // camera, boosts refraction and drives the canvas coverage below.
+        const pv = portalVisual();
+        const portalActive = getPortalState().active;
         const pulseOn = EFFECTS.ENABLE_SONIC_PULSE && !prefersReducedMotion;
         const bands = pulseOn
           ? getAudioBands()
@@ -1053,7 +1098,8 @@ export default function Monogram() {
         }
         const sEff =
           fieldStrength *
-          (isMobile ? FIELD.mobileStrength : FIELD.desktopStrength);
+          (isMobile ? FIELD.mobileStrength : FIELD.desktopStrength) *
+          pv.fieldAtten; // portal attenuates the Frequency Field during a dive
 
         // --- Compose additive offsets (§3) ------------------------------------
         // finalValue = base + heatOffset + fieldOffset + audioOffset. Audio
@@ -1061,7 +1107,7 @@ export default function Monogram() {
         // mobile 1.75x) and are hard-clamped per effect (lower ceilings on
         // mobile); 0 when the pulse is off / paused (bands -> 0).
         const bp = isMobile ? PULSE.mobile : PULSE.desktop;
-        const si = pulseOn ? bp.intensity : 0;
+        const si = (pulseOn ? bp.intensity : 0) * pv.sonicAtten;
         const audioRefract = Math.min(
           bp.refractClamp,
           (bands.bass * 0.5 + bands.mid * 0.5) * PULSE.refractPulseBase * si,
@@ -1096,8 +1142,21 @@ export default function Monogram() {
         // little so the summed monogram scale stays safe (audio analysis + the
         // heatmap are NOT reduced). pressStrength is last frame's value.
         const scalePulse = audioScale * (1 - 0.4 * pressStrength);
-        mesh.scale.setScalar(baseScaleValue * (1 + scalePulse));
+        // Portal dive adds a transient scale boost so the glass fills the
+        // viewport at the cover peak (guaranteed opaque by the marquee plane).
+        mesh.scale.setScalar(baseScaleValue * (1 + scalePulse) * (1 + pv.scaleBoost));
         mesh.position.z = audioDepth; // bass "mass" push (ortho -> subtle)
+
+        // --- Portal camera dive (ortho zoom + pan toward the cavity) ----------
+        // Simulated dive: magnify with camera.zoom and pan toward the aim point.
+        // Ortho => the camera never translates THROUGH geometry (no clipping).
+        // Idle (mobile / inactive) => zoom 1, pan 0 → base camera untouched.
+        if (camera.zoom !== pv.zoom) {
+          camera.zoom = pv.zoom;
+          camera.updateProjectionMatrix();
+        }
+        camera.position.x = pv.panX * naturalHeight * baseScaleValue;
+        camera.position.y = pv.panY * naturalHeight * baseScaleValue;
 
         // Marquee uniforms (Frequency Field distortion + glow + audio bg pulse).
         {
@@ -1127,6 +1186,11 @@ export default function Monogram() {
           gu.uFieldSpec.value = FIELD.specularBoostMax;
           gu.uAudioRefract.value = audioRefract;
           gu.uAudioSpec.value = audioSpec;
+          // Portal dive: transient refraction/blur/dispersion ON TOP of the
+          // heat-applied bases (refractMul 1 / adds 0 when idle → base restored).
+          gu.uRefractionStrength.value = profile.refraction * pv.refractMul;
+          gu.uBlurStrength.value = heatBlurBase + pv.blurAdd;
+          gu.uChromaticAberration.value = heatChromaBase + pv.dispAdd;
         }
 
         // --- Tactile pressure / liquid touch (mobile) -------------------------
@@ -1235,7 +1299,38 @@ export default function Monogram() {
         telemetry.dpr = pr();
         telemetry.fps = fpsSmooth;
 
-        renderFrame();
+        // --- Portal coverage: drive the canvas opacity (presence) + raise it
+        // above the UI while a transition runs. Guaranteed-opaque scene (marquee
+        // plane) at presence 1 hides the route swap with no flash. Only written
+        // on change (no per-frame DOM thrash).
+        if (pv.presence !== portalLastPresence) {
+          portalLastPresence = pv.presence;
+          stage.style.opacity = pv.presence.toFixed(3);
+        }
+        if (portalActive !== portalLastActive) {
+          portalLastActive = portalActive;
+          stage.style.zIndex = portalActive ? "40" : "";
+        }
+        telemetry.portalPresence = pv.presence;
+        telemetry.portalRefractBoost = pv.refractMul;
+        telemetry.portalCamZoom = pv.zoom;
+        telemetry.portalCamX = camera.position.x;
+        telemetry.portalCamY = camera.position.y;
+
+        // Debug cavity marker at the aim point (desktop; only when toggled on).
+        portalMarker.visible = PORTAL.showTargetMarker && !isMobile;
+        if (portalMarker.visible) {
+          portalMarker.position.set(
+            PORTAL.aimX * naturalHeight * baseScaleValue,
+            PORTAL.aimY * naturalHeight * baseScaleValue,
+            EXTRUDE_DEPTH,
+          );
+        }
+
+        // Skip the GPU render when the scene is fully hidden AND idle (internal
+        // desktop routes at rest) — the loop + audioTick keep running so the
+        // marquee phase / player bar stay live and never jump on resume.
+        if (!(pv.presence < 0.004 && !portalActive)) renderFrame();
 
         // one-time tier downgrade from measured average frame time
         if (!tierLocked) {
@@ -1263,6 +1358,8 @@ export default function Monogram() {
       // --- Glitch scheduler --------------------------------------------------
       const glitchTimers: ReturnType<typeof setTimeout>[] = [];
       const triggerGlitch = () => {
+        // No random RGB glitch during the portal transition.
+        if (getPortalState().active) return;
         glitchStart = performance.now();
         for (const ghost of glitchGhosts) ghost.visible = true;
       };
@@ -1282,6 +1379,8 @@ export default function Monogram() {
       };
       const onWheel = (e: WheelEvent) => {
         e.preventDefault();
+        // During a portal dive, ignore wheel → no new rotation inertia.
+        if (getPortalState().active) return;
         const nd = normalizeWheel(e);
         if (prefersReducedMotion) {
           // No prolonged inertia under reduced motion: a small direct nudge.
@@ -1581,6 +1680,8 @@ export default function Monogram() {
         blankTex.dispose();
         hmTex.dispose();
         for (const gm of glitchMats) gm.dispose();
+        portalMarker.geometry.dispose();
+        (portalMarker.material as import("three").Material).dispose();
         geometry.dispose();
         (mesh.material as import("three").Material).dispose();
         glassShader?.dispose();
@@ -1597,6 +1698,9 @@ export default function Monogram() {
       disposed = true;
       cleanup();
     };
+    // initialOpacity is an init-only seed (route-correct first paint); the loop
+    // drives coverage live thereafter — intentionally not a re-run dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

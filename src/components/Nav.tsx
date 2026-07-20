@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useNavClick } from "./PortalNav";
 import styles from "./Nav.module.css";
 
 /**
@@ -22,6 +23,7 @@ const SOUNDCLOUD_PATH =
 
 export default function Nav() {
   const pathname = usePathname();
+  const onNavClick = useNavClick();
 
   let activeIndex = NAV_ITEMS.findIndex((i) => i.href === pathname);
   if (activeIndex === -1) activeIndex = 0; // root fallback
@@ -79,6 +81,7 @@ export default function Nav() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={active ? styles.active : undefined}
+                onClick={onNavClick(item.href)}
               >
                 {item.label}
               </Link>

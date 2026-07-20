@@ -14,6 +14,7 @@ export const EFFECTS = {
   ENABLE_SONIC_PULSE: true,
   ENABLE_DESKTOP_SPECTRAL_HEATMAP: true, // desktop-only continuous thermal field
   ENABLE_MOBILE_TACTILE_PRESSURE: true, // mobile-only liquid touch (press + ripple)
+  ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION: true, // desktop-only cinematic route dive
 };
 
 // ---------------------------------------------------------------- FREQUENCY FIELD
@@ -302,6 +303,23 @@ export const telemetry = {
   hmMounted: false, // heatmap shader path is live for this breakpoint
   hmHeightPx: 0, // resolved field max height in CSS px (per breakpoint)
   hmRenderOrder: -1, // background plane renderOrder (heatmap is drawn on it)
+  // --- Desktop monogram portal transition -----------------------------------
+  portalActive: false,
+  portalPhase: "idle" as string,
+  portalProgress: 0,
+  portalDirection: "forward" as string,
+  portalSource: "" as string,
+  portalDest: "" as string,
+  portalPresence: 1, // canvas coverage/opacity (0..1)
+  portalRefractBoost: 1, // refraction multiplier applied this frame
+  portalCamZoom: 1,
+  portalCamX: 0,
+  portalCamY: 0,
+  portalLocked: false,
+  portalNavIndex: 0,
+  portalDepth: "MEDIUM" as string,
+  portalDuration: 640,
+  portalRefractIntensity: 1,
   // Mobile tactile pressure / liquid touch
   tacCandidate: false,
   tacActive: false,

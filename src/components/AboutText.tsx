@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePortalHold } from "./PortalNav";
 import styles from "@/app/about/about.module.css";
 
 /**
@@ -16,8 +17,12 @@ export default function AboutText({ text }: { text: string }) {
   const rafRef = useRef(0);
   const startRef = useRef(0);
   const delayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // While a forward portal dive is covering, don't type behind the glass — start
+  // only once the content is being revealed (starts once, never twice).
+  const hold = usePortalHold();
 
   useEffect(() => {
+    if (hold) return; // held behind the portal cover — wait for reveal
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const DURATION = reduce ? 0 : 1400; // total typing time, < 1500ms
     const START_DELAY = reduce ? 0 : 450; // after the title fade-in
@@ -43,7 +48,7 @@ export default function AboutText({ text }: { text: string }) {
       if (delayRef.current) clearTimeout(delayRef.current);
       cancelAnimationFrame(rafRef.current);
     };
-  }, [text]);
+  }, [text, hold]);
 
   return (
     <div className={styles.typeWrap}>

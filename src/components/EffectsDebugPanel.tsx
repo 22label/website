@@ -18,6 +18,14 @@ import {
   setTactileRippleIntensity,
   telemetry,
 } from "@/effects/effectsConfig";
+import {
+  PORTAL,
+  setPortalCameraDepth,
+  setPortalDuration,
+  setPortalRefraction,
+  setPortalTargetMarker,
+  type CameraDepth,
+} from "@/effects/portalTransition";
 import styles from "./EffectsDebugPanel.module.css";
 
 /**
@@ -62,7 +70,8 @@ export default function EffectsDebugPanel() {
       | "ENABLE_FREQUENCY_FIELD"
       | "ENABLE_SONIC_PULSE"
       | "ENABLE_DESKTOP_SPECTRAL_HEATMAP"
-      | "ENABLE_MOBILE_TACTILE_PRESSURE",
+      | "ENABLE_MOBILE_TACTILE_PRESSURE"
+      | "ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION",
   ) => {
     EFFECTS[key] = !EFFECTS[key];
     force((n) => n + 1);
@@ -83,6 +92,17 @@ export default function EffectsDebugPanel() {
   const setTacP = pick(setTactilePressureIntensity);
   const setTacR = pick(setTactileRippleIntensity);
   const setTacH = pick(setTactileHoldMs);
+  const setPortalDur = pick(setPortalDuration);
+  const setPortalRefr = pick(setPortalRefraction);
+  const pickDepth = (v: CameraDepth) => {
+    setPortalCameraDepth(v);
+    force((n) => n + 1);
+  };
+  const toggleMarker = () => {
+    setPortalTargetMarker(!PORTAL.showTargetMarker);
+    force((n) => n + 1);
+  };
+  const depthIdx = (d: string) => (d === "LOW" ? 0 : d === "HIGH" ? 2 : 1);
   const seg = (
     current: number,
     opts: [string, number][],
@@ -313,6 +333,66 @@ export default function EffectsDebugPanel() {
       {row("bg off", pct(t.bgOffset))}
       {row("refr off", pct(t.refractOffset))}
       {row("mono scale", t.monoScale.toFixed(3))}
+
+      <div className={styles.toggles}>
+        <button
+          type="button"
+          className={`${styles.toggle} ${EFFECTS.ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION ? styles.on : ""}`}
+          onClick={() => flip("ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION")}
+        >
+          PORTAL {EFFECTS.ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION ? "ON" : "OFF"}
+        </button>
+      </div>
+      {row("phase", t.portalPhase)}
+      {row("progress", pct(t.portalProgress))}
+      {row("direction", t.portalDirection)}
+      {row("route", `${t.portalSource || "—"} → ${t.portalDest || "—"}`)}
+      {row("coverage", pct(t.portalPresence))}
+      {row("refr boost", `${t.portalRefractBoost.toFixed(2)}×`)}
+      {row("cam zoom", t.portalCamZoom.toFixed(2))}
+      {row("cam x/y", `${Math.round(t.portalCamX)} ${Math.round(t.portalCamY)}`)}
+      {row("locked", t.portalLocked ? "yes" : "no")}
+      {row("nav index", t.portalNavIndex.toString())}
+      <div className={styles.section}>portal duration</div>
+      {seg(
+        PORTAL.durationMs,
+        [
+          ["500", 500],
+          ["640", 640],
+          ["700", 700],
+        ],
+        setPortalDur,
+      )}
+      <div className={styles.section}>portal refraction</div>
+      {seg(
+        PORTAL.refractionIntensity,
+        [
+          ["0.75×", 0.75],
+          ["1×", 1],
+          ["1.25×", 1.25],
+          ["1.5×", 1.5],
+        ],
+        setPortalRefr,
+      )}
+      <div className={styles.section}>camera depth</div>
+      {seg(
+        depthIdx(PORTAL.cameraDepth),
+        [
+          ["LOW", 0],
+          ["MED", 1],
+          ["HIGH", 2],
+        ],
+        (i) => pickDepth(i === 0 ? "LOW" : i === 2 ? "HIGH" : "MEDIUM"),
+      )}
+      <div className={styles.toggles}>
+        <button
+          type="button"
+          className={`${styles.toggle} ${PORTAL.showTargetMarker ? styles.on : ""}`}
+          onClick={toggleMarker}
+        >
+          TARGET {PORTAL.showTargetMarker ? "ON" : "OFF"}
+        </button>
+      </div>
 
       <div className={styles.section}>state</div>
       {row("field", pct(t.fieldStrength))}

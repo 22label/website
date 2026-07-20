@@ -1,8 +1,7 @@
-import Monogram from "@/components/Monogram";
-
 export default function Home() {
-  // The shared Shell (layout) renders the corners / mobile header, the desktop
-  // rail (info + player) and the global mobile bottom section. The Home centre
-  // is the WebGL marquee + 3D glass monogram (only mounts on this route).
-  return <Monogram />;
+  // The WebGL marquee + 3D glass monogram is now the PERSISTENT scene rendered by
+  // the shared Shell (so it survives client-side navigation and the desktop
+  // portal transition can dive it). Home therefore renders no centre content of
+  // its own — the persistent scene IS the Home hero.
+  return null;
 }

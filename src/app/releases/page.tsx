@@ -1,9 +1,10 @@
 import { PLATFORMS, releases } from "@/data/releases";
+import PortalMain from "@/components/PortalMain";
 import styles from "./releases.module.css";
 
 export default function ReleasesPage() {
   return (
-    <main className={styles.content}>
+    <PortalMain className={styles.content}>
       <h1 className={styles.title}>RELEASES</h1>
 
       <ul
@@ -78,6 +79,6 @@ export default function ReleasesPage() {
           </li>
         ))}
       </ul>
-    </main>
+    </PortalMain>
   );
 }

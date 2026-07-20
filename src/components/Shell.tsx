@@ -1,10 +1,11 @@
-import Link from "next/link";
 import Nav from "@/components/Nav";
 import MobileNav from "@/components/MobileNav";
 import ReleasePreviewer from "@/components/ReleasePreviewer";
 import DesktopRail from "@/components/DesktopRail";
 import MobileBottom from "@/components/MobileBottom";
 import EffectsDebugPanel from "@/components/EffectsDebugPanel";
+import PersistentScene from "@/components/PersistentScene";
+import LogoLink from "@/components/LogoLink";
 import styles from "./Shell.module.css";
 
 /**
@@ -15,15 +16,15 @@ import styles from "./Shell.module.css";
 export default function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className={styles.viewport}>
+      {/* Persistent WebGL scene (desktop: mounted across routes; mobile: Home
+          only). Sits behind everything so the portal transition can dive it. */}
+      <PersistentScene />
+
       {children}
 
-      {/* TOP-LEFT — logo (links Home) + subtitle */}
+      {/* TOP-LEFT — logo (links Home, portal-aware) + subtitle */}
       <header className={styles.topLeft}>
-        <Link
-          className={styles.logoLink}
-          href="/"
-          aria-label="2HOT2HANDLE — Home"
-        >
+        <LogoLink className={styles.logoLink}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             className={styles.logo}
@@ -32,7 +33,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             width={274}
             height={24}
           />
-        </Link>
+        </LogoLink>
         <p className={styles.subtitle}>RAW MUSIC CULTURE</p>
       </header>
 

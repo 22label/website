@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import Shell from "@/components/Shell";
 import AudioProvider from "@/components/AudioProvider";
+import PortalNav from "@/components/PortalNav";
 
 /**
  * Clash Display (Fontshare, ITF Free Font License) — self-hosted under
@@ -61,8 +62,12 @@ export default function RootLayout({
         {/* One persistent audio element for the whole app (survives client-side
             navigation), shared by the desktop rail + Home-mobile players. */}
         <AudioProvider>
-          {/* Shared shell: single no-scroll viewport + the anchored corners */}
-          <Shell>{children}</Shell>
+          {/* PortalNav owns the desktop route-transition timeline + navigation
+              and provides the transition phase to the shell + route content. */}
+          <PortalNav>
+            {/* Shared shell: single no-scroll viewport + the anchored corners */}
+            <Shell>{children}</Shell>
+          </PortalNav>
         </AudioProvider>
       </body>
     </html>

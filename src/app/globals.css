@@ -107,6 +107,18 @@ a {
   text-decoration: none;
 }
 
+/* Portal transition — while a forward dive is covering the viewport, the newly
+   mounted route content HOLDS its entrance animation (paused + hidden). Released
+   at the "revealing" phase, its existing keyframes then play as the glass
+   recedes. Desktop-only in practice (the transition never runs on mobile). */
+.portalHold,
+.portalHold * {
+  animation-play-state: paused !important;
+}
+.portalHold {
+  opacity: 0 !important;
+}
+
 ul {
   list-style: none;
 }

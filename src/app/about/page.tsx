@@ -1,4 +1,5 @@
 import AboutText from "@/components/AboutText";
+import PortalMain from "@/components/PortalMain";
 import styles from "./about.module.css";
 
 // Exact copy + paragraph structure from Figma (node 204:7158 / 204:8707).
@@ -17,9 +18,9 @@ it just changed shape.`;
 
 export default function AboutPage() {
   return (
-    <main className={styles.content}>
+    <PortalMain className={styles.content}>
       <h1 className={styles.title}>ABOUT</h1>
       <AboutText text={ABOUT_TEXT} />
-    </main>
+    </PortalMain>
   );
 }
