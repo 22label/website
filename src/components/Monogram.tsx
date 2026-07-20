@@ -894,6 +894,17 @@ export default function Monogram() {
       // Resolution-normalised: the marquee layout is the same fraction of the
       // buffer at ANY size/dpr, so PASS 1 (RT, capped dpr) and PASS 2 (screen,
       // dpr 2) stay perfectly aligned. Identical output to before on mobile.
+      // Field max height in CSS px per breakpoint. Desktop: the runtime
+      // 60/80/100px config. Mobile: responsive clamp(56px, 10dvh, 100px) — vh is
+      // the live viewport height (updated on resize / dynamic Safari toolbars).
+      const heatmapMaxCssPx = () =>
+        isMobile
+          ? Math.max(
+              HEATMAP.mobileMinHeightPx,
+              Math.min(HEATMAP.mobileMaxHeightPx, vh * HEATMAP.mobileHeightVh),
+            )
+          : HEATMAP.maxHeightPx;
+
       const setMarqueeUniforms = (resW: number, resH: number) => {
         const u = marqueeMaterial.uniforms;
         u.uResolution.value.set(resW, resH);
@@ -901,10 +912,10 @@ export default function Monogram() {
         u.uBandH.value = ((MARQUEE_BAND_H * marqueeScale()) / vh) * resH;
         u.uOffset.value = marqueeOffsetFrac * (u.uGroupW.value as number);
         // Heatmap sizes are physical px, so they must scale with THIS pass's
-        // resolution to render + refract identically. Height is the runtime
-        // 60/80/100px config, strongly reduced under prefers-reduced-motion.
+        // resolution to render + refract identically. Strongly reduced under
+        // prefers-reduced-motion.
         const rmScale = prefersReducedMotion ? 0.2 : 1;
-        u.uHmMaxH.value = ((HEATMAP.maxHeightPx * rmScale) / vh) * resH;
+        u.uHmMaxH.value = ((heatmapMaxCssPx() * rmScale) / vh) * resH;
         u.uHmSurfaceSoft.value = Math.max(2, (HEATMAP.surfaceSoftPx / vh) * resH);
       };
 
@@ -1177,32 +1188,41 @@ export default function Monogram() {
           telemetry.tacHoldMs = tacActive ? now - tacStartTime : 0;
         }
 
-        // --- Desktop spectral heatmap (continuous thermal field) -------------
-        // Desktop-only (>=1024px), audio-driven; upload the band energies to the
-        // reused LINEAR DataTexture (single visual source, refracted via the RT).
+        // --- Continuous spectral heatmap (thermal field) ---------------------
+        // Desktop (>=1024px) is fed LIVE by the AnalyserNode; MOBILE is fed by
+        // the precomputed spectrum (getAudioEnv/getAudioHeatmap are already
+        // mode-aware and do NOT depend on the AudioContext). Same shader path:
+        // the band energies go to the reused LINEAR DataTexture, drawn on the
+        // background plane and refracted through the glass via the RT.
         {
           const mu = marqueeMaterial.uniforms;
           const hmOn =
-            EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP && vw >= HEATMAP.minWidthPx;
+            EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP &&
+            (isMobile || vw >= HEATMAP.minWidthPx);
           const hmEnv = hmOn ? getAudioEnv() : 0;
           mu.uHmEnv.value = hmEnv;
+          const hmMaxCss = heatmapMaxCssPx();
           if (hmEnv > 0.001) {
             const field = getAudioHeatmap();
             for (let i = 0; i < HEATMAP.numBands; i++) {
               hmData[i * 4] = Math.min(255, field[i] * HEATMAP.intensity * 255);
             }
             hmTex.needsUpdate = true;
-            mu.uHmOpacity.value = HEATMAP.opacity;
+            mu.uHmOpacity.value = isMobile
+              ? HEATMAP.mobileOpacity
+              : HEATMAP.opacity;
             mu.uHmTopFade.value = HEATMAP.topFadeStart;
             // heatProgress nudges the palette toward red WITHOUT killing the green.
             mu.uHmHeatShift.value = smoothstep01(heat) * HEATMAP.heatShift;
           }
           telemetry.hmIntensity = HEATMAP.intensity;
-          telemetry.hmMaxCfg = HEATMAP.maxHeightPx;
+          telemetry.hmMaxCfg = hmMaxCss;
           telemetry.hmSmoothing = HEATMAP.smoothing;
-          telemetry.hmOpacity = HEATMAP.opacity;
-          telemetry.hmMaxHeightPx =
-            telemetry.hmPeak * HEATMAP.maxHeightPx * HEATMAP.intensity;
+          telemetry.hmOpacity = isMobile ? HEATMAP.mobileOpacity : HEATMAP.opacity;
+          telemetry.hmMounted = hmOn;
+          telemetry.hmHeightPx = hmMaxCss;
+          telemetry.hmRenderOrder = marqueePlane.renderOrder;
+          telemetry.hmMaxHeightPx = telemetry.hmPeak * hmMaxCss * HEATMAP.intensity;
         }
 
         // Debug telemetry (read by the ?debugEffects=1 panel; not visual).

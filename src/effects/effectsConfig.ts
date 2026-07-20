@@ -81,14 +81,19 @@ export const PULSE = {
     depthClamp: 26,
     barGain: 1.0, // player-bar --pulse-bar scaling (~4px)
   },
+  // Mobile is now clearly perceptible (default 2.5×, matching desktop's runtime
+  // gain), with its own visible ceilings raised per the mobile calibration:
+  // background 7–9%, refraction +8–12%, monogram +2.8–3.8%, specular +10–14%,
+  // local RGB/high +6–10%, player bar ≤3px. Attack/release + perceptual curve
+  // are shared (PULSE.attackRate/releaseRate/perceptualExp) — no layout shift.
   mobile: {
-    intensity: 1.75, // runtime OFF/0.5/1/1.75/2.5
-    bgClamp: 0.06, // 4–6% background
-    refractClamp: 0.08, // +5–8% refraction breath
-    scaleClamp: 0.025, // +1.8–2.5% mass (1.018–1.025)
-    specClamp: 0.09, // +6–9% specular
-    depthClamp: 16, // very subtle depth
-    barGain: 1.15, // ~2–3px player-bar movement (bar is narrower on mobile)
+    intensity: 2.5, // runtime OFF/1/1.75/2.5/3.5 — default 2.5×
+    bgClamp: 0.09, // 7–9% background pulse on the bass
+    refractClamp: 0.12, // +8–12% refraction breathing
+    scaleClamp: 0.038, // +2.8–3.8% monogram mass (1.028–1.038)
+    specClamp: 0.14, // +10–14% specular on the mids
+    depthClamp: 22, // more evident depth push (still subtle, ortho camera)
+    barGain: 1.1, // player bar ≤3px (bar is ~113px on mobile)
   },
 };
 
@@ -106,9 +111,16 @@ export function setMobileSonicIntensity(v: number): void {
 // colour is a vertical green->yellow->orange->red gradient driven by intensity.
 export const HEATMAP = {
   numBands: 40, // internal perceptual bands (left=low freq -> right=high). Never shown as columns.
-  minWidthPx: 1024, // desktop-only: never rendered/updated below this width
-  maxHeightPx: 100, // runtime (60 / 80 / 100) — hard clamp
-  intensity: 1.0, // runtime 0.5/1/1.5/2 — scales the field height
+  minWidthPx: 1024, // desktop LIVE gate — the continuous field renders on desktop above this width
+  maxHeightPx: 100, // desktop runtime (60 / 80 / 100) — hard clamp
+  // Mobile is fed by the precomputed spectrum (no AudioContext dependency) and
+  // sized responsively: clamp(56px, 10dvh, 100px). It renders full-width at the
+  // bottom, refracted through the liquid glass, at a clearly-visible opacity.
+  mobileMinHeightPx: 56,
+  mobileMaxHeightPx: 100,
+  mobileHeightVh: 0.1, // 10dvh
+  mobileOpacity: 0.55, // runtime 0.25/0.40/0.55/0.70 — 50–60% default, clearly visible
+  intensity: 1.0, // runtime 0.5/1/1.5/2 — scales the field height (both breakpoints)
   opacity: 0.52, // runtime 0.25/0.40/0.55/0.70 master opacity
   smoothing: 2, // runtime spatial smoothing 0=LOW 1=MEDIUM 2=HIGH (band-blur radius)
   smoothRadius: [1, 2, 4] as const, // band-blur radius per smoothing level
@@ -202,6 +214,9 @@ export function setHeatmapSmoothing(v: number): void {
 export function setHeatmapOpacity(v: number): void {
   HEATMAP.opacity = v;
 }
+export function setHeatmapMobileOpacity(v: number): void {
+  HEATMAP.mobileOpacity = v;
+}
 
 // ------------------------------------------------------- GLOBAL SAFETY CLAMPS (§3)
 // finalValue = base + heatOffset + fieldOffset + audioOffset, hard-capped here so
@@ -243,6 +258,25 @@ export const telemetry = {
   fps: 0,
   audioState: "none" as string,
   playing: false,
+  // --- Audio pipeline mode (LIVE_WEB_AUDIO desktop / PRECOMPUTED_MOBILE) -------
+  mode: "LIVE_WEB_AUDIO" as string,
+  // Mobile DIRECT_HTML_MEDIA playback (HTMLAudioElement, media channel)
+  mediaPaused: true,
+  mediaMuted: false,
+  mediaVolume: 0,
+  mediaCurrentTime: 0,
+  mediaDuration: 0,
+  mediaReadyState: 0,
+  mediaError: "" as string,
+  // Mobile PRECOMPUTED analysis
+  analysisLoaded: false,
+  analysisFrame: 0,
+  analysisFps: 0,
+  mBass: 0,
+  mMid: 0,
+  mHigh: 0,
+  mRms: 0,
+  mPeak: 0,
   // Gapless playback
   audioSourceCount: 0, // audible sources (must always be 0 or 1)
   audioOffset: 0, // current loop offset (s)
@@ -262,6 +296,9 @@ export const telemetry = {
   hmSmoothing: 2,
   hmOpacity: 0.52,
   hmActive: false, // rendered right now (desktop + on + audio)
+  hmMounted: false, // heatmap shader path is live for this breakpoint
+  hmHeightPx: 0, // resolved field max height in CSS px (per breakpoint)
+  hmRenderOrder: -1, // background plane renderOrder (heatmap is drawn on it)
   // Mobile tactile pressure / liquid touch
   tacCandidate: false,
   tacActive: false,

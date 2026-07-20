@@ -8,6 +8,7 @@ import {
   TACTILE,
   setHeatmapIntensity,
   setHeatmapMaxHeight,
+  setHeatmapMobileOpacity,
   setHeatmapOpacity,
   setHeatmapSmoothing,
   setMobileSonicIntensity,
@@ -78,6 +79,7 @@ export default function EffectsDebugPanel() {
   const setHmH = pick(setHeatmapMaxHeight);
   const setHmSmooth = pick(setHeatmapSmoothing);
   const setHmOp = pick(setHeatmapOpacity);
+  const setHmMobileOp = pick(setHeatmapMobileOpacity);
   const setTacP = pick(setTactilePressureIntensity);
   const setTacR = pick(setTactileRippleIntensity);
   const setTacH = pick(setTactileHoldMs);
@@ -136,10 +138,10 @@ export default function EffectsDebugPanel() {
             PULSE.mobile.intensity,
             [
               ["OFF", 0],
-              ["0.5×", 0.5],
               ["1×", 1],
               ["1.75×", 1.75],
               ["2.5×", 2.5],
+              ["3.5×", 3.5],
             ],
             setMobileIntensity,
           )
@@ -153,13 +155,36 @@ export default function EffectsDebugPanel() {
             ],
             setIntensity,
           )}
-      {row("playback", telemetry.audioSourceCount ? "gapless buffer" : "idle")}
-      {row("ctx", telemetry.audioState)}
-      {row("src count", telemetry.audioSourceCount.toString())}
-      {row("offset", `${telemetry.audioOffset.toFixed(2)}s`)}
-      {row(
-        "loop",
-        `${telemetry.loopStart.toFixed(2)}–${telemetry.loopEnd.toFixed(2)}s`,
+      {row("mode", t.mode)}
+
+      {t.mode === "PRECOMPUTED_MOBILE" ? (
+        <>
+          <div className={styles.section}>playback · DIRECT_HTML_MEDIA</div>
+          {row("paused", t.mediaPaused ? "yes" : "no")}
+          {row("muted", t.mediaMuted ? "yes" : "no")}
+          {row("volume", t.mediaVolume.toFixed(2))}
+          {row("time", `${t.mediaCurrentTime.toFixed(2)}s`)}
+          {row("duration", `${t.mediaDuration.toFixed(2)}s`)}
+          {row("readyState", t.mediaReadyState.toString())}
+          {row("play error", t.mediaError || "—")}
+          <div className={styles.section}>analysis · PRECOMPUTED</div>
+          {row("asset", t.analysisLoaded ? "loaded" : "loading…")}
+          {row("frame", `${t.analysisFrame} @ ${t.analysisFps}fps`)}
+          {row("bands", HEATMAP.numBands.toString())}
+          {trio("bass/mid/high", t.mBass, t.mMid, t.mHigh)}
+          {row("rms / peak", `${pct(t.mRms)} / ${pct(t.mPeak)}`)}
+        </>
+      ) : (
+        <>
+          {row("playback", t.audioSourceCount ? "gapless buffer" : "idle")}
+          {row("ctx", t.audioState)}
+          {row("src count", t.audioSourceCount.toString())}
+          {row("offset", `${t.audioOffset.toFixed(2)}s`)}
+          {row(
+            "loop",
+            `${t.loopStart.toFixed(2)}–${t.loopEnd.toFixed(2)}s`,
+          )}
+        </>
       )}
 
       <div className={styles.toggles}>
@@ -202,23 +227,29 @@ export default function EffectsDebugPanel() {
         ],
         setHmSmooth,
       )}
-      <div className={styles.section}>colour opacity</div>
+      <div className={styles.section}>
+        colour opacity ({isMobileVp ? "mobile" : "desktop"})
+      </div>
       {seg(
-        HEATMAP.opacity,
+        isMobileVp ? HEATMAP.mobileOpacity : HEATMAP.opacity,
         [
           ["25%", 0.25],
           ["40%", 0.4],
           ["55%", 0.55],
           ["70%", 0.7],
         ],
-        setHmOp,
+        isMobileVp ? setHmMobileOp : setHmOp,
       )}
       {row("bands", HEATMAP.numBands.toString())}
+      {row("hm mounted", t.hmMounted ? "yes" : "no")}
       {row("hm active", t.hmActive ? "yes" : "no")}
+      {row("hm opacity", pct(t.hmOpacity))}
+      {row("hm height", `${Math.round(t.hmHeightPx)}px`)}
+      {row("renderOrder", t.hmRenderOrder.toString())}
       {trio("sub/bass/mid", t.hmSub, t.hmBass, t.hmMid)}
       {row("high energy", pct(t.hmHigh))}
       {row("hm peak", pct(t.hmPeak))}
-      {row("hm max px", `${Math.round(t.hmMaxHeightPx)}px`)}
+      {row("hm max energy px", `${Math.round(t.hmMaxHeightPx)}px`)}
 
       <div className={styles.toggles}>
         <button

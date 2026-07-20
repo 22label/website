@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "source": "public/audio/intruder-snippet.mp3",
+  "analysisFps": 30,
+  "bandCount": 40,
+  "frameStride": 45,
+  "frames": 900,
+  "durationSec": 30,
+  "sampleRate": 44100,
+  "fftSize": 2048,
+  "freqRangeHz": [
+    20,
+    16000
+  ],
+  "bassRangeHz": [
+    20,
+    200
+  ],
+  "midRangeHz": [
+    200,
+    2000
+  ],
+  "highRangeHz": [
+    2000,
+    12000
+  ],
+  "mapping": "logarithmic",
+  "normalization": {
+    "bands": "single global dB-window peak (spectral balance preserved)",
+    "bassMidHigh": "per-channel global peak",
+    "dbWindow": [
+      -100,
+      -18
+    ]
+  },
+  "layout": {
+    "bands": [
+      0,
+      40
+    ],
+    "bass": 40,
+    "mid": 41,
+    "high": 42,
+    "rms": 43,
+    "peak": 44
+  },
+  "bytes": 40500
+}
