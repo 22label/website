@@ -703,6 +703,9 @@ function writeOut(barEnabled: boolean): void {
   telemetry.mid = bands.mid * env;
   telemetry.high = bands.high * env;
   telemetry.pulseStrength = level * env;
+  // FINAL applied strength = base level scaled by the per-breakpoint intensity
+  // relative to the 2.5 reference (so the +25% mobile boost is reflected here).
+  telemetry.sonicFinal = barEnabled ? level * env * (bp.intensity / 2.5) : 0;
   telemetry.sonicIntensity = bp.intensity;
 }
 

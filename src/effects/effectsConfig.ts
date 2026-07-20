@@ -81,19 +81,21 @@ export const PULSE = {
     depthClamp: 26,
     barGain: 1.0, // player-bar --pulse-bar scaling (~4px)
   },
-  // Mobile is now clearly perceptible (default 2.5×, matching desktop's runtime
-  // gain), with its own visible ceilings raised per the mobile calibration:
-  // background 7–9%, refraction +8–12%, monogram +2.8–3.8%, specular +10–14%,
-  // local RGB/high +6–10%, player bar ≤3px. Attack/release + perceptual curve
-  // are shared (PULSE.attackRate/releaseRate/perceptualExp) — no layout shift.
+  // Mobile Sonic Pulse — calibrated +25% over the previously-approved values
+  // (mobileSonicPulseFinal = current × 1.25). intensity AND every per-effect
+  // ceiling are scaled by 1.25 together, so the increase is uniform and never
+  // clipped away; the player bar rides `intensity/2.5` so it gains 25% too with
+  // barGain unchanged (no double count). Desktop (PULSE.desktop) is untouched;
+  // the shared bases + attack/release + perceptual curve are untouched; the
+  // global CLAMP safety caps are untouched. No layout shift, no pixelation.
   mobile: {
-    intensity: 2.5, // runtime OFF/1/1.75/2.5/3.5 — default 2.5×
-    bgClamp: 0.09, // 7–9% background pulse on the bass
-    refractClamp: 0.12, // +8–12% refraction breathing
-    scaleClamp: 0.038, // +2.8–3.8% monogram mass (1.028–1.038)
-    specClamp: 0.14, // +10–14% specular on the mids
-    depthClamp: 22, // more evident depth push (still subtle, ortho camera)
-    barGain: 1.1, // player bar ≤3px (bar is ~113px on mobile)
+    intensity: 3.125, // 2.5 × 1.25 — runtime OFF/1.75/2.5/3.13/3.75, default 3.13×
+    bgClamp: 0.1125, // 0.09 × 1.25 — ~9–11% background pulse on the bass
+    refractClamp: 0.15, // 0.12 × 1.25 — +10–15% refraction breathing
+    scaleClamp: 0.0475, // 0.038 × 1.25 — +3.5–4.75% monogram mass (≤1.0475)
+    specClamp: 0.175, // 0.14 × 1.25 — +12.5–17.5% specular on the mids
+    depthClamp: 27.5, // 22 × 1.25 — a touch more depth push (still ortho-subtle)
+    barGain: 1.1, // unchanged — the bar's +25% comes from intensity/2.5
   },
 };
 
@@ -248,7 +250,8 @@ export const telemetry = {
   normBass: 0,
   normMid: 0,
   normHigh: 0,
-  pulseStrength: 0, // final overall Sonic Pulse strength (0..1, incl. env)
+  pulseStrength: 0, // overall Sonic Pulse level (0..1, incl. env, pre-intensity)
+  sonicFinal: 0, // FINAL applied pulse strength incl. the per-breakpoint intensity
   bgOffset: 0, // applied background brightness offset
   refractOffset: 0, // applied refraction breath offset
   monoScale: 1, // applied final monogram scale multiplier

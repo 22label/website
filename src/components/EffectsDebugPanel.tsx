@@ -138,10 +138,10 @@ export default function EffectsDebugPanel() {
             PULSE.mobile.intensity,
             [
               ["OFF", 0],
-              ["1×", 1],
               ["1.75×", 1.75],
               ["2.5×", 2.5],
-              ["3.5×", 3.5],
+              ["3.13×", 3.125],
+              ["3.75×", 3.75],
             ],
             setMobileIntensity,
           )
@@ -309,6 +309,7 @@ export default function EffectsDebugPanel() {
       {trio("norm", t.normBass, t.normMid, t.normHigh)}
       {trio("smooth", t.bass, t.mid, t.high)}
       {row("pulse", pct(t.pulseStrength))}
+      {row("final pulse", `${pct(t.sonicFinal)} @ ${t.sonicIntensity}×`)}
       {row("bg off", pct(t.bgOffset))}
       {row("refr off", pct(t.refractOffset))}
       {row("mono scale", t.monoScale.toFixed(3))}
