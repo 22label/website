@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import styles from "./Monogram.module.css";
 import {
+  AUDIO_WAVEFORM,
   CLAMP,
   EFFECTS,
   FIELD,
@@ -11,6 +12,10 @@ import {
   TACTILE,
   telemetry,
 } from "@/effects/effectsConfig";
+import {
+  createSpectralWaveformV2,
+  type SpectralWaveformV2,
+} from "@/effects/spectralWaveformV2";
 import {
   getBands as getAudioBands,
   getEnv as getAudioEnv,
@@ -425,6 +430,16 @@ export default function Monogram({
       const naturalHeight = bbox.max.y - bbox.min.y;
 
       const isMobile = vw <= 767;
+      // Audio-waveform variant (V1 thermal heatmap / V2 dotted waveform). Config
+      // default with an optional ?waveform=v1|v2 override. V2 renders a separate
+      // points layer and bypasses the thermal render (only one runs).
+      const wfQuery =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("waveform")
+          : null;
+      const waveformVariant: "V1" | "V2" =
+        wfQuery === "v1" ? "V1" : wfQuery === "v2" ? "V2" : AUDIO_WAVEFORM.variant;
+      let waveformV2: SpectralWaveformV2 | null = null;
       // Debug toggle: ?glass=legacy forces the legacy transmission material on
       // mobile so legacy vs custom can be compared. Not surfaced in the UI.
       const forceLegacy =
@@ -740,6 +755,21 @@ export default function Monogram({
       }
       const mesh = new THREE.Mesh(geometry, meshMaterial);
       scene.add(mesh);
+
+      // AUDIO WAVEFORM V2 — dotted spectral surface behind/around the glass
+      // (replaces the thermal heatmap render when active). Points sit at
+      // renderOrder -1 with depthTest, so the opaque monogram occludes the part
+      // directly behind it (readability preserved) while it shows around it and
+      // is refracted through the glass in PASS 1.
+      if (waveformVariant === "V2") {
+        waveformV2 = createSpectralWaveformV2(THREE, {
+          vw,
+          vh,
+          isMobile,
+          dpr: Math.min(window.devicePixelRatio, maxDpr()),
+        });
+        scene.add(waveformV2.object3D);
+      }
 
       // --- Portal cavity target marker (debug only) --------------------------
       // Small dot at the aim point, shown ONLY with ?debugEffects=1 + TARGET on.
@@ -1262,6 +1292,7 @@ export default function Monogram({
           const mu = marqueeMaterial.uniforms;
           const hmOn =
             EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP &&
+            waveformVariant !== "V2" && // V2 replaces the thermal render
             (isMobile || vw >= HEATMAP.minWidthPx);
           const hmEnv = hmOn ? getAudioEnv() : 0;
           mu.uHmEnv.value = hmEnv;
@@ -1288,6 +1319,13 @@ export default function Monogram({
           telemetry.hmRenderOrder = marqueePlane.renderOrder;
           telemetry.hmMaxHeightPx = telemetry.hmPeak * hmMaxCss * HEATMAP.intensity;
         }
+
+        // AUDIO WAVEFORM V2 — driven by the same shared audio field/env.
+        waveformV2?.update({
+          dtSec,
+          time: now * 0.001,
+          reducedMotion: prefersReducedMotion,
+        });
 
         // Debug telemetry (read by the ?debugEffects=1 panel; not visual).
         fpsSmooth = fpsSmooth * 0.92 + (dtSec > 0 ? 1 / dtSec : 60) * 0.08;
@@ -1599,6 +1637,7 @@ export default function Monogram({
           glassShader.uniforms.uResolution.value.set(vw, vh);
         }
         applyFit();
+        waveformV2?.resize(vw, vh);
       };
       window.addEventListener("resize", onResize);
       // Orientation changes and Safari's dynamic viewport (URL/tool bars showing
@@ -1690,6 +1729,7 @@ export default function Monogram({
         marqueeMaterial.dispose();
         envRT.texture.dispose();
         pmrem.dispose();
+        waveformV2?.dispose();
         renderer.dispose();
       };
     })();

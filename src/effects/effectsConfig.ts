@@ -20,6 +20,34 @@ export const EFFECTS = {
   ENABLE_CURSOR_TRAIL: true, // desktop-only localized refraction cursor trail (approved zones)
 };
 
+// -------------------------------------------------------------- AUDIO WAVEFORM
+// The bottom spectral visualization behind/around the glass monogram.
+//   V1 = the existing thermal heatmap field (unchanged, kept as fallback).
+//   V2 = a 3D dotted audio waveform (spectralWaveformV2.ts): parallel rows of
+//        luminous points forming one surface, spectral palette red→blue.
+// Default V2 so localhost shows the dotted waveform. When V2 is active the
+// thermal render is bypassed (only one runs); the audio pipeline is shared.
+// Optional URL override ?waveform=v1|v2. All values tunable here.
+export const AUDIO_WAVEFORM = {
+  variant: "V2" as "V1" | "V2",
+  columnsDesktop: 72, // spectral columns across X (desktop)
+  rowsDesktop: 26, // ordered Z rows (depth) (desktop)
+  columnsMobile: 44,
+  rowsMobile: 14,
+  pointSize: 3.4, // base dot size (px, DPR-scaled)
+  widthFrac: 0.94, // surface width as a fraction of the viewport
+  heightFrac: 0.32, // vertical screen area the rows rise across (~heatmap area)
+  bottomMarginFrac: 0.05, // gap from the viewport bottom
+  ampPx: 140, // max audio Y displacement (px)
+  idleAmpPx: 16, // restrained idle wave amplitude (px) — sculptural when silent
+  idleSpeed: 0.7, // idle wave temporal speed
+  depthFront: -240, // z of the front row (behind the monogram, ahead of marquee)
+  depthBack: -840, // z of the back row
+  rowRiseFrac: 0.55, // faked perspective: how much back rows rise on screen
+  rowShrink: 0.3, // faked perspective: how much back rows narrow
+  brightness: 1.15, // color intensity
+};
+
 // ----------------------------------------------------------------- CURSOR TRAIL
 // A very subtle, refracted cursor trace that appears ONLY inside approved zones
 // on DESKTOP pointers: the central 3D glass, relevant imagery, and the primary
