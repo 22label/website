@@ -159,9 +159,9 @@ export default function EffectsDebugPanel() {
             [
               ["OFF", 0],
               ["2.5×", 2.5],
-              ["3.13×", 3.125],
-              ["4.38×", 4.375],
-              ["5×", 5],
+              ["4.06×", 4.0625],
+              ["5.69×", 5.6875],
+              ["6.5×", 6.5],
             ],
             setMobileIntensity,
           )
@@ -170,8 +170,8 @@ export default function EffectsDebugPanel() {
             [
               ["OFF", 0],
               ["1×", 1],
-              ["3×", 3],
-              ["4×", 4],
+              ["3.9×", 3.9],
+              ["5.2×", 5.2],
             ],
             setIntensity,
           )}

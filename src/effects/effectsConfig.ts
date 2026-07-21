@@ -73,37 +73,39 @@ export const PULSE = {
   depthBase: 10, // world-unit z "mass" push (ortho camera -> subtle)
   // Breakpoint calibration: mobile is ~70% of the potentiated desktop, with its
   // own visible ceilings. `intensity` is the runtime OFF/…/x control per device.
-  // Desktop Sonic Pulse — calibrated +20% over the previously-approved values
-  // (desktopSonicPulse = prior × 1.20). intensity AND every per-effect ceiling
-  // scale by 1.20 together, so the increase is uniform and never clipped away;
-  // the player bar rides `intensity/2.5` so it gains 20% too with barGain
-  // unchanged (no double count). The shared bases, attack/release + perceptual
-  // curve and the global CLAMP safety caps are untouched.
+  // Desktop Sonic Pulse — a FURTHER +30% over the previously-boosted values
+  // (desktopSonicPulse = prior_boosted × 1.30; cumulatively ≈ ×1.56 over the
+  // originally-approved values). intensity AND every per-effect ceiling scale by
+  // 1.30 together, so the increase is uniform and never clipped away; the player
+  // bar rides `intensity/2.5` so it gains 30% too with barGain unchanged (no
+  // double count). The shared bases, attack/release + perceptual curve and the
+  // global CLAMP safety caps are untouched.
   desktop: {
-    intensity: 3.0, // 2.5 × 1.20 — runtime OFF/1/3/4, default 3×
-    bgClamp: 0.096, // 0.08 × 1.20 — background brightness up to ~9.6%
-    refractClamp: 0.12, // 0.10 × 1.20 — refraction breath up to 12%
-    scaleClamp: 0.042, // 0.035 × 1.20 — monogram mass up to +4.2% (1.042)
-    specClamp: 0.144, // 0.12 × 1.20 — specular up to +14.4%
-    depthClamp: 31.2, // 26 × 1.20
-    barGain: 1.0, // unchanged — the bar's +20% comes from intensity/2.5
+    intensity: 3.9, // 3.0 × 1.30 — runtime OFF/1/3.9/5.2, default 3.9×
+    bgClamp: 0.1248, // 0.096 × 1.30 — background brightness up to ~12.5%
+    refractClamp: 0.156, // 0.12 × 1.30 — refraction breath up to ~15.6%
+    scaleClamp: 0.0546, // 0.042 × 1.30 — monogram mass up to +5.46% (1.0546)
+    specClamp: 0.1872, // 0.144 × 1.30 — specular up to ~+18.7%
+    depthClamp: 40.56, // 31.2 × 1.30
+    barGain: 1.0, // unchanged — the bar's +30% comes from intensity/2.5
   },
-  // Mobile Sonic Pulse — calibrated +40% over the previously-approved values
-  // (mobileSonicPulseFinal = prior × 1.40, where prior was itself +25%). The
-  // mobile pulse was barely noticeable, so intensity AND every per-effect
-  // ceiling are scaled by 1.40 together — uniform, never clipped away, and tuned
-  // independently of desktop. The player bar rides `intensity/2.5` so it gains
-  // 40% too with barGain unchanged (no double count). Desktop (PULSE.desktop) is
-  // tuned separately; the shared bases + attack/release + perceptual curve are
-  // untouched; the global CLAMP safety caps are untouched. No layout shift.
+  // Mobile Sonic Pulse — a FURTHER +30% over the previously-boosted values
+  // (mobileSonicPulseFinal = prior_boosted × 1.30; cumulatively ≈ ×2.275 over
+  // the originally-approved baseline). The mobile pulse was still too subtle, so
+  // intensity AND every per-effect ceiling are scaled by 1.30 together — uniform,
+  // never clipped away, and tuned independently of desktop. The player bar rides
+  // `intensity/2.5` so it gains 30% too with barGain unchanged (no double count).
+  // Desktop (PULSE.desktop) is tuned separately; the shared bases + attack/release
+  // + perceptual curve are untouched; the global CLAMP safety caps are untouched.
+  // No layout shift.
   mobile: {
-    intensity: 4.375, // 3.125 × 1.40 — runtime OFF/2.5/3.13/4.38/5, default 4.38×
-    bgClamp: 0.1575, // 0.1125 × 1.40 — ~13–16% background pulse on the bass
-    refractClamp: 0.21, // 0.15 × 1.40 — +14–21% refraction breathing
-    scaleClamp: 0.0665, // 0.0475 × 1.40 — +4.75–6.65% monogram mass (≤1.0665)
-    specClamp: 0.245, // 0.175 × 1.40 — +17.5–24.5% specular on the mids
-    depthClamp: 38.5, // 27.5 × 1.40 — a touch more depth push (still ortho-subtle)
-    barGain: 1.1, // unchanged — the bar's +40% comes from intensity/2.5
+    intensity: 5.6875, // 4.375 × 1.30 — runtime OFF/2.5/4.06/5.69/6.5, default 5.69×
+    bgClamp: 0.20475, // 0.1575 × 1.30 — ~17–20% background pulse on the bass
+    refractClamp: 0.273, // 0.21 × 1.30 — +18–27% refraction breathing
+    scaleClamp: 0.08645, // 0.0665 × 1.30 — +6.2–8.6% monogram mass (≤1.0865)
+    specClamp: 0.3185, // 0.245 × 1.30 — +23–32% specular on the mids
+    depthClamp: 50.05, // 38.5 × 1.30 — a touch more depth push (still ortho-subtle)
+    barGain: 1.1, // unchanged — the bar's +30% comes from intensity/2.5
   },
 };
 
