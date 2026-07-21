@@ -1,0 +1,24 @@
+/* Localized cursor ghost trail overlay — see CursorTrail.tsx.
+   Fixed, full-viewport, never interactive. z-index 4 places it ABOVE the scene
+   (0) and the release previewer (3) so the trace is visible over the glass and
+   imagery, but BELOW the text chrome (nav/logo/info are z-5) so it can never
+   reduce text readability. Mobile + reduced motion hide it entirely (the JS also
+   opts out on both, so the canvas is inert there). */
+.canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+@media (max-width: 767px) {
+  .canvas {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas {
+    display: none;
+  }
+}

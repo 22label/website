@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { setNavIntent } from "@/effects/navIntent";
 import styles from "./MobileNav.module.css";
 
 /**
@@ -139,7 +140,10 @@ export default function MobileNav() {
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={active ? styles.menuActive : undefined}
-                  onClick={close}
+                  onClick={() => {
+                    setNavIntent("internal"); // mobile internal nav → restrained reveal
+                    close();
+                  }}
                 >
                   {item.label}
                 </Link>

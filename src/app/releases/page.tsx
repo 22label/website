@@ -1,11 +1,12 @@
 import { PLATFORMS, releases } from "@/data/releases";
 import PortalMain from "@/components/PortalMain";
+import KineticTitle from "@/components/KineticTitle";
 import styles from "./releases.module.css";
 
 export default function ReleasesPage() {
   return (
     <PortalMain className={styles.content}>
-      <h1 className={styles.title}>RELEASES</h1>
+      <KineticTitle className={styles.title}>RELEASES</KineticTitle>
 
       <ul
         className={styles.rail}

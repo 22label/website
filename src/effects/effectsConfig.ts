@@ -15,6 +15,84 @@ export const EFFECTS = {
   ENABLE_DESKTOP_SPECTRAL_HEATMAP: true, // desktop-only continuous thermal field
   ENABLE_MOBILE_TACTILE_PRESSURE: true, // mobile-only liquid touch (press + ripple)
   ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION: true, // desktop-only cinematic route dive
+  ENABLE_KINETIC_TITLES: true, // materialization-style title reveal on route entry
+  ENABLE_PHYSICAL_CARD: true, // desktop-only weighted tilt/parallax/shine on the Coming Soon card
+  ENABLE_CURSOR_TRAIL: true, // desktop-only localized refraction cursor trail (approved zones)
+};
+
+// ----------------------------------------------------------------- CURSOR TRAIL
+// A very subtle, refracted cursor trace that appears ONLY inside approved zones
+// on DESKTOP pointers: the central 3D glass, relevant imagery, and the primary
+// nav links. One decoupled 2D canvas overlay (pointer-events:none, DPR-clamped),
+// z-index 4 so it sits above the scene/imagery but BELOW the text chrome (nav is
+// z-5) → it can never reduce text readability. Outside the zones nothing is
+// added and the trace fades out within `lifeMs`. Not neon / particles / comet /
+// custom cursor — a thin cool line with a tiny transverse "refraction" ghost.
+// No touch/mobile, no reduced motion (both opt out entirely).
+export const TRAIL = {
+  // Approved DOM zones, matched with event.target.closest(). Primary nav links
+  // (NOT the target=_blank social icons) + imagery. The central glass is added
+  // as a geometric region below (Home only) because the scene canvas is
+  // pointer-events:none and can't be hit-tested via the event target.
+  selector: 'img, nav a:not([target="_blank"])',
+  glassRegion: { wFrac: 0.46, hFrac: 0.86 }, // centered box ≈ the monogram (Home only)
+  lifeMs: 230, // 200–250ms trace lifetime
+  maxPoints: 40, // ring-buffer cap (no unbounded growth)
+  minMovePx: 2.5, // ignore sub-pixel jitter between samples
+  lineWidth: 1.4, // thin
+  baseOpacity: 0.14, // extremely restrained peak alpha
+  refractOffsetPx: 1.4, // tiny transverse displacement → refraction hint (not a comet)
+  color: [198, 214, 255] as [number, number, number], // cool white-blue (#C6D6FF)
+  dprMax: 2, // device-pixel-ratio clamp
+};
+
+// --------------------------------------------------------------- PHYSICAL CARD
+// Turns the bottom-right "Coming Soon" release previewer into a physical,
+// editorial object on DESKTOP ONLY (mobile is untouched — the card is hidden
+// there). A weighted (heavy, slow) tilt of ≤2°, an opposite image-crop parallax
+// for depth, and a SINGLE glass/plastic reflection sweep when hover begins (never
+// looping). All driven by one rAF writing inline transforms from lerped targets
+// — no React re-render per frame — and it settles precisely back to the original
+// state on leave. Reduced motion / non-hover pointers → none of this attaches;
+// the existing collapsed/expanded reveal (now staggered line-by-line) still runs.
+export const CARD = {
+  maxTiltDeg: 2, // max rotateX/rotateY — never exaggerated
+  parallaxPx: 6, // opposite image-crop shift at full tilt
+  coverZoom: 0.06, // subtle cover scale headroom so parallax never reveals edges
+  perspectivePx: 900, // 3D perspective depth
+  ease: 0.09, // per-frame lerp toward target (small = heavier/slower response)
+  settleEps: 0.015, // snap-to-rest threshold (deg/px) → exact original state
+  shineMs: 720, // single reflection sweep duration (once per hover-enter)
+  revealStaggerMs: 70, // per-line delay for the masked line-by-line copy reveal
+};
+
+// ------------------------------------------------------------- KINETIC TITLES
+// A materialization / "refraction settling" reveal for the Releases / About /
+// A Day With headings on route entry. The real <h1> text stays semantic and
+// sharp by default; a few thin, aria-hidden horizontal SLICE clones arrive with
+// small timing offsets and converge, while the base text settles out of a light
+// horizontal blur — signal reconstruction, NOT a glitch (no RGB split, no
+// flicker, no vertical displacement). Runs ONCE per entry (component lifecycle),
+// never loops. Timing is chosen by nav arrival kind (see navIntent):
+//   portal (Home↔internal) → ~600ms, gated by the existing .portalHold reveal
+//   internal↔internal      → ~380ms, immediate on mount
+//   direct load / refresh  → no kinetic reveal (keeps the baseline titleIn)
+// Mobile has no portal, so it uses one restrained timing with fewer/lighter
+// slices. Reduced motion → resolve instantly (no slices, no settle). A direct
+// load / refresh is intentionally NOT kinetic (it is server-painted sharp, so a
+// reveal would flash/mismatch) — it keeps only the baseline `titleIn`.
+export const KINETIC = {
+  portalMs: 600, // Home↔internal portal arrival (target 550–650)
+  internalMs: 380, // internal↔internal (target 350–400)
+  mobileMs: 340, // mobile: single restrained timing (no portal on mobile)
+  slicesDesktop: 5, // thin horizontal slices (desktop)
+  slicesMobile: 3, // fewer/lighter on mobile
+  staggerMs: 42, // per-slice arrival offset (small)
+  maxBlurPx: 6, // base-text horizontal refraction blur at start (desktop)
+  mobileBlurPx: 3, // lighter blur on mobile
+  sliceOffsetPx: 14, // max horizontal slice displacement at start (desktop)
+  mobileOffsetPx: 8, // lighter displacement on mobile
+  scaleXFrom: 1.012, // tiny horizontal over-scale that settles to 1
 };
 
 // ---------------------------------------------------------------- FREQUENCY FIELD

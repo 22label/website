@@ -1,4 +1,5 @@
 import PortalMain from "@/components/PortalMain";
+import KineticTitle from "@/components/KineticTitle";
 import styles from "./a-day-with.module.css";
 
 const INTRO =
@@ -7,7 +8,7 @@ const INTRO =
 export default function ADayWithPage() {
   return (
     <PortalMain className={styles.content}>
-      <h1 className={styles.title}>A DAY WITH</h1>
+      <KineticTitle className={styles.title}>A DAY WITH</KineticTitle>
 
       <div className={styles.block}>
         <p className={styles.intro}>{INTRO}</p>

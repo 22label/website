@@ -1,57 +1,70 @@
-/* Music player control (desktop node 212:471/484, mobile node 212:566).
+/* Music player control — approved pill button (desktop 56px / mobile 41px).
    Placement is handled by the parent (desktop rail / Home mobile section); this
-   file styles the button itself. Only the button is interactive. */
+   file styles the button itself. Only the button is interactive.
 
-/* Per-variant sizing tokens. OFF line is 73px for both. */
+   OFF:     white pill, black speaker icon + "PLAY".
+   PLAYING: transparent pill + 1px white outline, white icon + track title.
+
+   The play/pause action and the OFF/ON state come from MusicPlayerControl
+   (unchanged) — this file only changes the visual treatment + internal spacing. */
+
+/* Per-variant sizing tokens. */
 .control {
   --title-w: 119px;
-  --on-line: 151px;
+  --play-w: 48px;
+  --pill-h: 56px;
   --font: 14px;
   --ls: 1.54px;
 }
 .mobile {
   --title-w: 81px;
-  --on-line: 113px;
+  --play-w: 40px;
+  --pill-h: 41px;
   --font: 12px;
   --ls: 1.32px;
 }
 
+/* The pill. */
 .toggle {
   position: relative;
   display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px; /* top row -> line */
+  flex-direction: row;
+  align-items: center;
+  gap: 8px; /* icon -> label (Figma) */
+  box-sizing: border-box;
+  height: var(--pill-h);
+  padding: 0 24px;
   margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #fff;
+  border: 1px solid transparent;
+  border-radius: 999px; /* fully rounded */
+  background: #fff; /* OFF: white fill */
+  color: #000; /* OFF: black content */
   cursor: pointer;
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
   -webkit-appearance: none;
   appearance: none;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    color 0.3s ease;
 }
-/* Accessible hit area covering the icon + PLAY/title, without layout shift. */
-.toggle::before {
-  content: "";
-  position: absolute;
-  inset: -12px;
+.toggle:hover {
+  background: #ededed; /* OFF: subtle */
 }
 .toggle:focus {
   outline: none;
 }
 .toggle:focus-visible {
   outline: 2px solid #fff;
-  outline-offset: 6px;
-  border-radius: 2px;
+  outline-offset: 4px;
+  border-radius: 999px;
 }
 
 .row {
   display: flex;
   align-items: center;
-  gap: 16px; /* icon -> label */
+  gap: 8px; /* icon -> label (Figma) */
   height: 16px;
 }
 
@@ -60,15 +73,19 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+  filter: invert(1); /* white SVG -> black on the white OFF pill */
+  transition: filter 0.3s ease;
 }
 
-/* Zero-width slot: PLAY and the title window overlay here (absolute), so the
-   button width is driven by the line and there is no layout jump on toggle. */
+/* Label window: sized to PLAY when OFF, to the title when ON — drives the pill
+   width so it expands smoothly with no layout jump. */
 .labelSlot {
   position: relative;
-  width: 0;
+  width: var(--play-w);
   height: 16px;
+  overflow: hidden;
   flex-shrink: 0;
+  transition: width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .playLabel {
@@ -79,7 +96,7 @@
   font-size: var(--font);
   letter-spacing: var(--ls);
   line-height: 16px;
-  color: #fff;
+  color: inherit; /* black OFF, white ON (follows .toggle) */
   opacity: 1; /* visible in OFF */
   transition: opacity 0.2s ease 0.18s; /* fades in after the title has gone */
 }
@@ -88,13 +105,11 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 0;
+  width: 100%;
   height: 16px;
   overflow: hidden;
   opacity: 0;
-  transition:
-    opacity 0.14s ease,
-    width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.14s ease;
 }
 
 .marquee {
@@ -111,47 +126,37 @@
   font-size: var(--font);
   letter-spacing: var(--ls);
   line-height: 16px;
-  color: #fff;
+  color: inherit; /* white ON (follows .toggle) */
 }
 
-/* ON/OFF graphic line (not a progress bar): 73px OFF, --on-line ON. */
+/* The legacy reactive divider line is not part of the pill (kept in the DOM,
+   hidden here — the audio pipeline / --pulse-bar are untouched). */
 .line {
-  display: block;
-  width: 73px;
-  height: var(--bar-thickness);
-  background: var(--divider);
-  transition: width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
+  display: none;
 }
 
-/* ---------- ON ---------- */
+/* ---------- PLAYING ---------- */
+.toggle[data-state="on"] {
+  background: transparent; /* white fill disappears */
+  border-color: #fff; /* 1px white outline */
+  color: #fff; /* white content */
+}
+.toggle[data-state="on"]:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.toggle[data-state="on"] .icon {
+  filter: none; /* white icon on the transparent pill */
+}
+.toggle[data-state="on"] .labelSlot {
+  width: var(--title-w); /* pill expands to the title window */
+}
 .toggle[data-state="on"] .playLabel {
   opacity: 0;
   transition: opacity 0.14s ease; /* fades out fast when going ON */
 }
 .toggle[data-state="on"] .titleClip {
-  width: var(--title-w);
   opacity: 1;
-  transition:
-    opacity 0.2s ease 0.18s, /* appears after PLAY has faded */
-    width 0.46s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.toggle[data-state="on"] .line {
-  width: var(--on-line);
-  /* Sonic Pulse micro-waveform: subtle bass-driven scaleX (<= ~1.8px on the
-     151px bar) + brightness. --pulse-bar is 0 when silent/OFF, so this is the
-     IDENTITY transform at rest — the approved look/width/thickness is unchanged.
-     transform/filter aren't transitioned, so they track the audio in real time
-     (the fade in/out lives in the --pulse-bar value itself). */
-  transform-origin: left center;
-  transform: scaleX(calc(1 + var(--pulse-bar, 0) * 0.027));
-  filter: brightness(calc(1 + var(--pulse-bar, 0) * 0.4));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .toggle[data-state="on"] .line {
-    transform: none;
-    filter: none;
-  }
+  transition: opacity 0.2s ease 0.18s; /* appears after PLAY has faded */
 }
 .toggle[data-state="on"] .marquee {
   animation: marquee 12s linear infinite;

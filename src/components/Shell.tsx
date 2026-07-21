@@ -5,6 +5,7 @@ import DesktopRail from "@/components/DesktopRail";
 import MobileBottom from "@/components/MobileBottom";
 import EffectsDebugPanel from "@/components/EffectsDebugPanel";
 import PersistentScene from "@/components/PersistentScene";
+import CursorTrail from "@/components/CursorTrail";
 import LogoLink from "@/components/LogoLink";
 import styles from "./Shell.module.css";
 
@@ -20,6 +21,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           only). Sits behind everything so the portal transition can dive it. */}
       <PersistentScene />
 
+      {/* Localized cursor ghost trail — decoupled 2D overlay, desktop-only,
+          self-gated; renders only inside approved zones. */}
+      <CursorTrail />
+
       {children}
 
       {/* TOP-LEFT — logo (links Home, portal-aware) + subtitle */}
@@ -34,7 +39,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             height={24}
           />
         </LogoLink>
-        <p className={styles.subtitle}>RAW MUSIC CULTURE</p>
+        <p className={styles.subtitle}>EST. 2026 / BCN [ES]</p>
       </header>
 
       {/* TOP-RIGHT — navigation + social */}

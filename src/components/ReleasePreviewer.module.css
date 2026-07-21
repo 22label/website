@@ -20,6 +20,19 @@
   }
 }
 
+/* Tilt wrapper — holds the copy + cover as one plane. The physical-card tilt
+   (JS inline transform) lives HERE, never on .release, so the fixed
+   .rightGradient keeps the viewport as its containing block. Carries the 24px
+   gap that used to sit on .release. */
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 24px;
+  will-change: transform;
+}
+
 .value {
   color: var(--white);
 }
@@ -112,8 +125,17 @@
     transform 0.26s ease 0.06s;
 }
 
+/* Controlled line-by-line reveal — each line rises + fades with a per-line
+   `--reveal-delay` (set in React). The grid 0fr→1fr on .releaseDetails still
+   governs height, so there is no layout jump. Under reduced motion the global
+   rule collapses these transitions to ~0ms → a static reveal. */
 .releaseDetailsInner .value {
   white-space: nowrap;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
 }
 
 /* Cover — 110×110 default, 220×220 on hover. */
@@ -132,6 +154,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transform-origin: center;
+  will-change: transform; /* JS drives the opposite-direction crop parallax */
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -143,6 +167,12 @@
   .release:focus-within .releaseDetailsInner {
     opacity: 1;
     transform: translateY(0);
+  }
+  .release:hover .releaseDetailsInner .value,
+  .release:focus-within .releaseDetailsInner .value {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: var(--reveal-delay, 0ms);
   }
   .release:hover .coverWrap,
   .release:focus-within .coverWrap {
@@ -158,5 +188,61 @@
     transition:
       opacity 0.14s ease,
       max-height 0.3s ease 0.06s;
+  }
+}
+
+/* Single glass/plastic reflection sweep — one diagonal highlight travels across
+   the card ONCE when hover begins (JS toggles data-shine with a reflow so it
+   never loops). pointer-events:none + aria-hidden; clipped to the card bounds
+   and kept extremely subtle so the copy stays legible. */
+.shine {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.shine::before {
+  content: "";
+  position: absolute;
+  top: -25%;
+  left: -60%;
+  width: 45%;
+  height: 150%;
+  transform: translateX(-120%) rotate(8deg);
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 42%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0.06) 58%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.card[data-shine="1"] .shine {
+  opacity: 1;
+}
+
+.card[data-shine="1"] .shine::before {
+  animation: cardShine var(--card-shine-ms, 720ms)
+    cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+@keyframes cardShine {
+  from {
+    transform: translateX(-120%) rotate(8deg);
+  }
+  to {
+    transform: translateX(360%) rotate(8deg);
+  }
+}
+
+/* Reduced motion: no reflection sweep (JS already opts out too). */
+@media (prefers-reduced-motion: reduce) {
+  .shine {
+    display: none;
   }
 }

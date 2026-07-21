@@ -20,6 +20,7 @@ import {
   type PortalPhase,
   type PortalDirection,
 } from "@/effects/portalTransition";
+import { setNavIntent } from "@/effects/navIntent";
 
 /**
  * Desktop Monogram Portal Transition — the React controller.
@@ -245,6 +246,7 @@ export default function PortalNav({ children }: { children: React.ReactNode }) {
       const from = window.location.pathname;
       if (href === from) return; // active route → no-op, no duplicate push
       if (!portalEnabled() || prefersReduced()) {
+        setNavIntent("internal"); // no portal here → internal-timing title reveal
         prevPathRef.current = href; // keep Back/Forward tracking in sync
         router.push(href); // below breakpoint / flag off / reduced motion
         return;
@@ -252,11 +254,13 @@ export default function PortalNav({ children }: { children: React.ReactNode }) {
       if (getPortalState().active) return; // ignore clicks during a run
       prevPathRef.current = href; // committed path (so a later popstate reads `from` right)
       if (shouldPortal(from, href)) {
+        setNavIntent("portal"); // Home↔internal → portal-timing title reveal
         runForward(from, href);
       } else {
         // Internal → internal: immediate normal navigation. No transition, no
         // overlay, no lock — but still bump the namespaced nav index so browser
         // Back/Forward direction stays correct for the Home↔internal portals.
+        setNavIntent("internal");
         router.push(href);
         bumpIndex();
       }
@@ -278,6 +282,7 @@ export default function PortalNav({ children }: { children: React.ReactNode }) {
 
     const onPop = (e: PopStateEvent) => {
       if (!portalEnabled() || prefersReduced()) {
+        setNavIntent("internal"); // back/forward with no portal → internal reveal
         prevPathRef.current = window.location.pathname;
         const st = (e.state as Record<string, unknown>) || {};
         if (typeof st.__2h2hNavIndex === "number")
@@ -301,7 +306,12 @@ export default function PortalNav({ children }: { children: React.ReactNode }) {
       // Only play the portal when Home is one end; internal↔internal Back/Forward
       // is already swapped by the browser and stays immediate (canvas invisible
       // on both → no flash, no lock, no stale state).
-      if (shouldPortal(from, to)) runReverse(from, to, dir);
+      if (shouldPortal(from, to)) {
+        setNavIntent("portal"); // Home↔internal reverse → portal-timing reveal
+        runReverse(from, to, dir);
+      } else {
+        setNavIntent("internal"); // internal↔internal reverse → internal reveal
+      }
     };
     window.addEventListener("popstate", onPop);
 

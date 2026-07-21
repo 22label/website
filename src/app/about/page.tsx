@@ -1,5 +1,6 @@
 import AboutText from "@/components/AboutText";
 import PortalMain from "@/components/PortalMain";
+import KineticTitle from "@/components/KineticTitle";
 import styles from "./about.module.css";
 
 // Exact copy + paragraph structure from Figma (node 204:7158 / 204:8707).
@@ -19,7 +20,7 @@ it just changed shape.`;
 export default function AboutPage() {
   return (
     <PortalMain className={styles.content}>
-      <h1 className={styles.title}>ABOUT</h1>
+      <KineticTitle className={styles.title}>ABOUT</KineticTitle>
       <AboutText text={ABOUT_TEXT} />
     </PortalMain>
   );
