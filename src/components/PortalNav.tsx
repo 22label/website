@@ -93,6 +93,11 @@ export function usePortalHold(): boolean {
 }
 
 const restFor = (path: string): number => (path === "/" ? 1 : 0);
+/** The portal/dive transition runs ONLY when the Home route (`/`) is one end of
+ *  the navigation. Internal↔internal (releases/about/a-day-with) navigates
+ *  immediately with no overlay, no lock and no scene change. */
+const shouldPortal = (from: string, to: string): boolean =>
+  from === "/" || to === "/";
 const FAILSAFE_MS = 1200;
 
 export default function PortalNav({ children }: { children: React.ReactNode }) {
@@ -240,13 +245,23 @@ export default function PortalNav({ children }: { children: React.ReactNode }) {
       const from = window.location.pathname;
       if (href === from) return; // active route → no-op, no duplicate push
       if (!portalEnabled() || prefersReduced()) {
+        prevPathRef.current = href; // keep Back/Forward tracking in sync
         router.push(href); // below breakpoint / flag off / reduced motion
         return;
       }
       if (getPortalState().active) return; // ignore clicks during a run
-      runForward(from, href);
+      prevPathRef.current = href; // committed path (so a later popstate reads `from` right)
+      if (shouldPortal(from, href)) {
+        runForward(from, href);
+      } else {
+        // Internal → internal: immediate normal navigation. No transition, no
+        // overlay, no lock — but still bump the namespaced nav index so browser
+        // Back/Forward direction stays correct for the Home↔internal portals.
+        router.push(href);
+        bumpIndex();
+      }
     },
-    [router, runForward],
+    [router, runForward, bumpIndex],
   );
 
   // Seed the namespaced nav index + popstate direction tracking.
@@ -283,7 +298,10 @@ export default function PortalNav({ children }: { children: React.ReactNode }) {
       prevPathRef.current = to;
       if (from === to) return;
       if (getPortalState().active) return;
-      runReverse(from, to, dir);
+      // Only play the portal when Home is one end; internal↔internal Back/Forward
+      // is already swapped by the browser and stays immediate (canvas invisible
+      // on both → no flash, no lock, no stale state).
+      if (shouldPortal(from, to)) runReverse(from, to, dir);
     };
     window.addEventListener("popstate", onPop);
 

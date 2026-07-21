@@ -73,30 +73,37 @@ export const PULSE = {
   depthBase: 10, // world-unit z "mass" push (ortho camera -> subtle)
   // Breakpoint calibration: mobile is ~70% of the potentiated desktop, with its
   // own visible ceilings. `intensity` is the runtime OFF/…/x control per device.
+  // Desktop Sonic Pulse — calibrated +20% over the previously-approved values
+  // (desktopSonicPulse = prior × 1.20). intensity AND every per-effect ceiling
+  // scale by 1.20 together, so the increase is uniform and never clipped away;
+  // the player bar rides `intensity/2.5` so it gains 20% too with barGain
+  // unchanged (no double count). The shared bases, attack/release + perceptual
+  // curve and the global CLAMP safety caps are untouched.
   desktop: {
-    intensity: 2.5, // runtime OFF/1/2.5/4
-    bgClamp: 0.08, // background brightness up to 8%
-    refractClamp: 0.1, // refraction breath up to 10%
-    scaleClamp: 0.035, // monogram mass up to +3.5% (1.035)
-    specClamp: 0.12, // specular up to +12%
-    depthClamp: 26,
-    barGain: 1.0, // player-bar --pulse-bar scaling (~4px)
+    intensity: 3.0, // 2.5 × 1.20 — runtime OFF/1/3/4, default 3×
+    bgClamp: 0.096, // 0.08 × 1.20 — background brightness up to ~9.6%
+    refractClamp: 0.12, // 0.10 × 1.20 — refraction breath up to 12%
+    scaleClamp: 0.042, // 0.035 × 1.20 — monogram mass up to +4.2% (1.042)
+    specClamp: 0.144, // 0.12 × 1.20 — specular up to +14.4%
+    depthClamp: 31.2, // 26 × 1.20
+    barGain: 1.0, // unchanged — the bar's +20% comes from intensity/2.5
   },
-  // Mobile Sonic Pulse — calibrated +25% over the previously-approved values
-  // (mobileSonicPulseFinal = current × 1.25). intensity AND every per-effect
-  // ceiling are scaled by 1.25 together, so the increase is uniform and never
-  // clipped away; the player bar rides `intensity/2.5` so it gains 25% too with
-  // barGain unchanged (no double count). Desktop (PULSE.desktop) is untouched;
-  // the shared bases + attack/release + perceptual curve are untouched; the
-  // global CLAMP safety caps are untouched. No layout shift, no pixelation.
+  // Mobile Sonic Pulse — calibrated +40% over the previously-approved values
+  // (mobileSonicPulseFinal = prior × 1.40, where prior was itself +25%). The
+  // mobile pulse was barely noticeable, so intensity AND every per-effect
+  // ceiling are scaled by 1.40 together — uniform, never clipped away, and tuned
+  // independently of desktop. The player bar rides `intensity/2.5` so it gains
+  // 40% too with barGain unchanged (no double count). Desktop (PULSE.desktop) is
+  // tuned separately; the shared bases + attack/release + perceptual curve are
+  // untouched; the global CLAMP safety caps are untouched. No layout shift.
   mobile: {
-    intensity: 3.125, // 2.5 × 1.25 — runtime OFF/1.75/2.5/3.13/3.75, default 3.13×
-    bgClamp: 0.1125, // 0.09 × 1.25 — ~9–11% background pulse on the bass
-    refractClamp: 0.15, // 0.12 × 1.25 — +10–15% refraction breathing
-    scaleClamp: 0.0475, // 0.038 × 1.25 — +3.5–4.75% monogram mass (≤1.0475)
-    specClamp: 0.175, // 0.14 × 1.25 — +12.5–17.5% specular on the mids
-    depthClamp: 27.5, // 22 × 1.25 — a touch more depth push (still ortho-subtle)
-    barGain: 1.1, // unchanged — the bar's +25% comes from intensity/2.5
+    intensity: 4.375, // 3.125 × 1.40 — runtime OFF/2.5/3.13/4.38/5, default 4.38×
+    bgClamp: 0.1575, // 0.1125 × 1.40 — ~13–16% background pulse on the bass
+    refractClamp: 0.21, // 0.15 × 1.40 — +14–21% refraction breathing
+    scaleClamp: 0.0665, // 0.0475 × 1.40 — +4.75–6.65% monogram mass (≤1.0665)
+    specClamp: 0.245, // 0.175 × 1.40 — +17.5–24.5% specular on the mids
+    depthClamp: 38.5, // 27.5 × 1.40 — a touch more depth push (still ortho-subtle)
+    barGain: 1.1, // unchanged — the bar's +40% comes from intensity/2.5
   },
 };
 

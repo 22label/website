@@ -158,10 +158,10 @@ export default function EffectsDebugPanel() {
             PULSE.mobile.intensity,
             [
               ["OFF", 0],
-              ["1.75×", 1.75],
               ["2.5×", 2.5],
               ["3.13×", 3.125],
-              ["3.75×", 3.75],
+              ["4.38×", 4.375],
+              ["5×", 5],
             ],
             setMobileIntensity,
           )
@@ -170,7 +170,7 @@ export default function EffectsDebugPanel() {
             [
               ["OFF", 0],
               ["1×", 1],
-              ["2.5×", 2.5],
+              ["3×", 3],
               ["4×", 4],
             ],
             setIntensity,
