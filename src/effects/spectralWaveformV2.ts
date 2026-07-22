@@ -132,6 +132,8 @@ type Alloc = {
   region: Float32Array; // per-column motion region (0 = bass .. 1 = high)
   attackRate: Float32Array; // per-column attack rate (1/s), by region
   releaseRate: Float32Array; // per-column release rate (1/s), by region
+  bandGain: Float32Array; // per-column post-gamma displacement gain (height rebalance)
+  decayLUT: Float32Array; // per-cell (row×col) energy-decay by pulse age + band
   smooth: Float32Array; // spectrum resampled to columns
   wide: Float32Array; // wide-blur reference (bass influence / unsharp base)
   smoothB: Float32Array; // articulated (region-processed) columns
@@ -247,6 +249,7 @@ export function createSpectralWaveformV2(
     const region = new Float32Array(NX);
     const attackRate = new Float32Array(NX);
     const releaseRate = new Float32Array(NX);
+    const bandGain = new Float32Array(NX);
     const ss = (e0: number, e1: number, v: number) => {
       const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0)));
       return t * t * (3 - 2 * t);
@@ -264,6 +267,36 @@ export function createSpectralWaveformV2(
         cfg.releaseRateHigh,
         rg,
       );
+      bandGain[c] = r3(cfg.bandGainBass, cfg.bandGainMid, cfg.bandGainHigh, rg);
+    }
+
+    // Per-cell energy-decay LUT: a pulse fades with AGE (row) at a rate set by its
+    // frequency REGION (column) — bass slow, highs fast. Static (audio-independent),
+    // so precompute once. Full for the first pulseHoldFrac of the life, then a
+    // smoothstep down to 0 by the band's lifetime → clean, pop-free disappearance.
+    const decayLUT = new Float32Array(NX * NZ);
+    const fe = cfg.frontExtend;
+    const hold = cfg.pulseHoldFrac;
+    for (let r = 0; r < NZ; r++) {
+      const rowV = NZ > 1 ? r / (NZ - 1) : 0;
+      const ageSec = Math.max(0, fe + rowV * (1 - fe)) * cfg.historySeconds;
+      for (let c = 0; c < NX; c++) {
+        const life = r3(
+          cfg.pulseLifeBass,
+          cfg.pulseLifeMid,
+          cfg.pulseLifeHigh,
+          region[c],
+        );
+        const t = life > 0 ? ageSec / life : 1;
+        let d: number;
+        if (t <= hold) d = 1;
+        else if (t >= 1) d = 0;
+        else {
+          const u = (t - hold) / (1 - hold);
+          d = 1 - u * u * (3 - 2 * u); // smoothstep down to 0
+        }
+        decayLUT[r * NX + c] = d;
+      }
     }
 
     return {
@@ -277,6 +310,8 @@ export function createSpectralWaveformV2(
       region,
       attackRate,
       releaseRate,
+      bandGain,
+      decayLUT,
       smooth: new Float32Array(NX),
       wide: new Float32Array(NX),
       smoothB: new Float32Array(NX),
@@ -408,7 +443,9 @@ export function createSpectralWaveformV2(
       const ageSec = Math.max(0, geoAV) * cfg.historySeconds;
       const row = r * NX;
       for (let c = 0; c < NX; c++) {
-        const v = sampleByAge(ageSec, c);
+        // Frozen historical energy × per-cell pulse-age decay → pulses lose height
+        // as they travel back and die into the flat plane (no permanent ocean).
+        const v = sampleByAge(ageSec, c) * st.decayLUT[row + c];
         fieldData[row + c] = v <= 0 ? 0 : v >= 1 ? 255 : Math.round(v * 255);
       }
     }
@@ -444,7 +481,10 @@ export function createSpectralWaveformV2(
     const NX = st.NX;
     for (let c = 0; c < NX; c++) {
       const boosted = Math.min(1, st.smoothB[c] * cfg.spectralGain);
-      const target = Math.pow(boosted, cfg.contrast) * env;
+      // Per-band height rebalance AFTER the gamma: pull bass down, lift mids/highs
+      // so the optical envelope is even across the width (compensates the upstream
+      // bass-dominant normalization). >1 is fine here — clamped when written.
+      const target = Math.pow(boosted, cfg.contrast) * env * st.bandGain[c];
       const cur = st.colState[c];
       // Region-dependent attack/release: highs snap + decay fast, bass stays heavy
       // → adjacent regions no longer rise/fall together (articulated alternation).

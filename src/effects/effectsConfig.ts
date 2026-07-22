@@ -62,23 +62,32 @@ export const AUDIO_WAVEFORM = {
   // an orthographic camera screen-Y is affine in world-Y, so uniform on-screen
   // spacing = linear interpolation (the exact inverse projection — no power curve).
   // --- Audio response (≥60% more relief than the previous 235px) ---
-  ampPx: 380, // max audio Y displacement (px)
-  spectralGain: 1.6, // lift the normalised analyser energy into usable amplitude
-  contrast: 1.35, // gamma → peak/trough separation (localised formations)
-  // Per-region MOTION CHARACTER (articulated, not one fluid sheet). Bass is
-  // weighty/slow; mids medium; highs fast + snappy so short transients register.
-  // Per-second attack/release, interpolated per column by frequency region.
-  attackRateBass: 14,
-  releaseRateBass: 4,
-  attackRateMid: 27,
-  releaseRateMid: 11,
-  attackRateHigh: 46,
-  releaseRateHigh: 21,
-  // Per-region SPATIAL response: bass uses a wide box blur (broad influence);
-  // mids/highs re-sharpen local detail with an unsharp mask (more, narrower peaks)
-  // — derived from the real spectrum, never procedural noise. Clamped, no spikes.
+  ampPx: 380, // max audio Y displacement (px) — GLOBAL amplitude (unchanged)
+  spectralGain: 1.5, // lift the normalised energy (a touch below clip → pointy summits)
+  contrast: 1.55, // gamma → peak/valley separation (sculpted, not domes)
+  // Per-band DISPLACEMENT GAIN (applied AFTER the contrast gamma) — rebalances the
+  // height envelope that the shared upstream normalization leaves bass-dominant:
+  // bass is pulled DOWN (≈−35%) so it no longer towers, mids/highs pushed UP
+  // (≈+65%) so they participate across the full width. NOT a global amplitude
+  // change (uAmp is fixed); the peak actually lowers slightly.
+  bandGainBass: 0.7475, // 0.65 × 1.15 → bass displacement +15% (still < 1, no clip)
+  bandGainMid: 1.65,
+  bandGainHigh: 1.65,
+  // Per-region MOTION CHARACTER (percussive, nervous — faster in mids/highs). Fast
+  // attacks capture transient summits; short releases let the front settle to
+  // neutral between events so beats read as distinct. Bass weighty but not slow.
+  attackRateBass: 20,
+  releaseRateBass: 10,
+  attackRateMid: 46,
+  releaseRateMid: 30,
+  attackRateHigh: 90,
+  releaseRateHigh: 55,
+  // Per-region SPATIAL response: bass uses a wide box blur (broad mountain base);
+  // mids/highs re-sharpen local detail with a stronger unsharp mask → articulated
+  // rise/summit/descent with valleys between. Real spectrum only; clamped (no
+  // spikes, no procedural noise).
   wideBlurRadius: 4, // bass influence radius / unsharp reference
-  unsharpAmount: 1.05, // mid/high local-detail accentuation (0 = off)
+  unsharpAmount: 1.2, // mid/high local-detail accentuation → sculpted (not needles)
   // --- Horizontal frequency map (perceptual 20/50/30 allocation) ---
   // Width is split into low/mid/high bands; within each, frequency is log-
   // interpolated across its Hz range, then converted to a position into the
@@ -92,12 +101,21 @@ export const AUDIO_WAVEFORM = {
   midMaxHz: 4000, // mid/high crossover
   bandFreqHighHz: 9200, // effective analyser band ceiling (~hiBinFrac · Nyquist)
   // --- Temporal history (front-to-back travelling waves) ---
-  historySeconds: 2, // visible surface = latest ~2.0s of audio (time-based)
+  historySeconds: 2, // ring-buffer window (s) — the geometry maps rows across it
   historyHz: 30, // spectral snapshots captured per second (ring buffer)
   backHeightScale: 0.6, // travelling crest keeps ~60% of its height near the back
   heightFalloffStart: 0.4, // depth (aV) where crest-height compression begins
-  // --- Idle terrain (deterministic low-relief; also the reduced-motion surface) ---
-  idleAmpPx: 66, // restrained multi-octave terrain relief when silent (px, +60%)
+  // --- Pulse lifecycle: per-band ENERGY DECAY over age (birth → travel → death) ---
+  // A captured pulse loses height as it ages and disappears — decoupling the
+  // EFFECTIVE visible history from the geometric grid. Bass lingers, highs vanish
+  // fast, so old mountains decay into the flat plane instead of accumulating into
+  // a permanent rolling sea. Precomputed per-cell into a decay LUT (buildField).
+  pulseLifeBass: 1.4, // seconds a bass pulse stays visible (longest, but not lingering)
+  pulseLifeMid: 0.8,
+  pulseLifeHigh: 0.42,
+  pulseHoldFrac: 0.15, // fresh pulse stays full for this fraction of its life
+  // --- Idle terrain (near-flat static texture; also the reduced-motion surface) ---
+  idleAmpPx: 8, // tiny static relief — valleys/pulses come from audio, not idle
   // --- Back/horizon fade (per-point, in the shader) ---
   fadeStart: 0.5, // depth (0 front .. 1 back) where the far fade begins → 0 at back
   brightness: 1.2, // dot intensity
