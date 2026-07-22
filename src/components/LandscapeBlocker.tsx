@@ -45,10 +45,15 @@ export default function LandscapeBlocker() {
   if (!visible) return null;
 
   return (
-    <div className={styles.blocker} role="alertdialog" aria-modal="true" aria-label="Rotate your device">
+    <div
+      className={styles.blocker}
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Only portrait mode. Full volume."
+    >
       <p className={styles.copy}>
-        <span className={styles.line}>ROTATE THE RECORD,</span>
-        <span className={styles.line}>NOT YOUR PHONE.</span>
+        <span className={styles.line}>ONLY PORTRAIT MODE.</span>
+        <span className={styles.line}>FULL VOLUME.</span>
       </p>
     </div>
   );
