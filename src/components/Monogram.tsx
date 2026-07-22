@@ -777,11 +777,12 @@ export default function Monogram({
         scene.add(waveformV2.object3D);
       }
 
-      // --- Cursor trail (desktop, monogram-only) -----------------------------
+      // --- Cursor / touch trail (monogram-only) ------------------------------
       // Soft #73F608 glow drawn as a final additive pass, STENCIL-masked to the
-      // real monogram silhouette (rotation-aware, cavities excluded). Desktop
-      // fine-pointer only; reduced motion + touch opt out. Reuses this renderer/
-      // camera/mesh; does NOT touch the glass shader or refraction passes.
+      // real monogram silhouette (rotation-aware, cavities excluded). Desktop fine
+      // pointers get the hover trail; touch devices get a finger-drag trail. Mobile
+      // mounts the scene Home-only, so this is inherently Home-only. Reduced motion
+      // opts out. Reuses this renderer/camera/mesh; glass passes are untouched.
       const finePointer =
         typeof window !== "undefined" &&
         window.matchMedia("(hover: hover) and (pointer: fine)").matches;
@@ -790,10 +791,9 @@ export default function Monogram({
         .getContextAttributes()?.stencil;
       if (
         EFFECTS.ENABLE_CURSOR_TRAIL &&
-        !isMobile &&
-        finePointer &&
         !prefersReducedMotion &&
-        stencilOK
+        stencilOK &&
+        (finePointer || isMobile)
       ) {
         cursorTrail = createMonogramCursorTrail(THREE, {
           renderer,
@@ -806,19 +806,41 @@ export default function Monogram({
       }
       const trailRaycaster = new THREE.Raycaster();
       const trailNdc = new THREE.Vector2();
-      const onTrailPointer = (e: PointerEvent) => {
-        if (!cursorTrail) return;
+      let trailTouchId: number | null = null; // active PRIMARY touch (one only)
+      const trailHit = (clientX: number, clientY: number) => {
         trailNdc.set(
-          (e.clientX / window.innerWidth) * 2 - 1,
-          -(e.clientY / window.innerHeight) * 2 + 1,
+          (clientX / window.innerWidth) * 2 - 1,
+          -(clientY / window.innerHeight) * 2 + 1,
         );
         trailRaycaster.setFromCamera(trailNdc, camera);
-        if (trailRaycaster.intersectObject(mesh, false).length > 0) {
-          cursorTrail.sample(e.clientX, e.clientY);
+        return trailRaycaster.intersectObject(mesh, false).length > 0;
+      };
+      const onTrailMove = (e: PointerEvent) => {
+        if (!cursorTrail) return;
+        if (e.pointerType === "mouse") {
+          // Desktop hover — UNCHANGED: sample wherever the ray hits the monogram.
+          if (trailHit(e.clientX, e.clientY)) cursorTrail.sample(e.clientX, e.clientY);
+        } else if (e.pointerId === trailTouchId) {
+          // Active primary touch only, and only over the monogram silhouette (off
+          // the shape → no new samples; the existing trail decays on its own).
+          if (trailHit(e.clientX, e.clientY)) cursorTrail.sample(e.clientX, e.clientY);
         }
       };
+      const onTrailDown = (e: PointerEvent) => {
+        if (!cursorTrail || e.pointerType === "mouse") return; // touch/pen only
+        if (trailTouchId !== null) return; // ignore extra simultaneous fingers
+        if (!trailHit(e.clientX, e.clientY)) return; // gesture must BEGIN on the shape
+        trailTouchId = e.pointerId;
+        cursorTrail.sample(e.clientX, e.clientY); // immediate response to a tap
+      };
+      const onTrailUp = (e: PointerEvent) => {
+        if (e.pointerId === trailTouchId) trailTouchId = null; // stop emitting → decay
+      };
       if (cursorTrail) {
-        window.addEventListener("pointermove", onTrailPointer, { passive: true });
+        window.addEventListener("pointermove", onTrailMove, { passive: true });
+        window.addEventListener("pointerdown", onTrailDown, { passive: true });
+        window.addEventListener("pointerup", onTrailUp, { passive: true });
+        window.addEventListener("pointercancel", onTrailUp, { passive: true });
       }
 
       // --- Portal cavity target marker (debug only) --------------------------
@@ -1759,7 +1781,10 @@ export default function Monogram({
         window.removeEventListener("orientationchange", onResizeCoalesced);
         window.visualViewport?.removeEventListener("resize", onResizeCoalesced);
         window.removeEventListener("pointermove", onFieldPointer);
-        window.removeEventListener("pointermove", onTrailPointer);
+        window.removeEventListener("pointermove", onTrailMove);
+        window.removeEventListener("pointerdown", onTrailDown);
+        window.removeEventListener("pointerup", onTrailUp);
+        window.removeEventListener("pointercancel", onTrailUp);
         // Hand the single audio rAF back to the engine (player bar keeps working
         // on routes without the WebGL scene).
         setAudioDriver(false);

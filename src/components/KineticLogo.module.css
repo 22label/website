@@ -9,4 +9,10 @@
   position: relative;
   display: inline-flex;
   line-height: 0;
+  /* Touch tap: no flash/callout/selection, crisp tap (no 300ms delay / dbl-tap
+     zoom). Scoped to the small logo only — does not affect page scrolling. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: manipulation;
 }

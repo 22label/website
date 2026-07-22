@@ -55,24 +55,56 @@ export default function KineticLogo({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!EFFECTS.ENABLE_KINETIC_TITLES) return;
-    if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const host = hostRef.current;
     if (!host) return;
+    const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     let playing = false;
     let timer = 0;
-    const onEnter = () => {
-      if (playing) return; // one burst; ignore until it settles (no re-trigger)
+    // One burst per trigger. The `playing` guard ignores re-triggers mid-cycle
+    // (the component's safe replay behaviour — no stacking), and the timeout always
+    // settles the mark back to its exact resting state.
+    const burst = () => {
+      if (playing) return;
       playing = true;
       host.setAttribute("data-kt-play", "1");
       timer = window.setTimeout(() => {
-        host.removeAttribute("data-kt-play"); // settle back to the exact original
+        host.removeAttribute("data-kt-play");
         playing = false;
       }, TOTAL_MS);
     };
-    host.addEventListener("pointerenter", onEnter);
+
+    // DESKTOP (fine pointer): unchanged — one burst on hover-enter.
+    const onEnter = () => burst();
+
+    // MOBILE / touch: one deliberate TAP = one burst. Fires on pointerup so it
+    // starts immediately (before any link navigation) with no artificial delay; a
+    // dragged finger (moved) is ignored so a scroll/swipe can't trigger it.
+    let armed = false;
+    let dx = 0;
+    let dy = 0;
+    const onDown = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") return;
+      armed = true;
+      dx = e.clientX;
+      dy = e.clientY;
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerType === "mouse" || !armed) return;
+      armed = false;
+      if (Math.hypot(e.clientX - dx, e.clientY - dy) < 12) burst();
+    };
+
+    if (fine) {
+      host.addEventListener("pointerenter", onEnter);
+    } else {
+      host.addEventListener("pointerdown", onDown);
+      host.addEventListener("pointerup", onUp);
+    }
     return () => {
       host.removeEventListener("pointerenter", onEnter);
+      host.removeEventListener("pointerdown", onDown);
+      host.removeEventListener("pointerup", onUp);
       if (timer) window.clearTimeout(timer);
       host.removeAttribute("data-kt-play");
     };

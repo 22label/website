@@ -22,6 +22,7 @@
 .logoLink {
   display: inline-flex;
   width: fit-content;
+  -webkit-tap-highlight-color: transparent; /* no blue tap flash on the logo (mobile) */
 }
 .logoLink:focus-visible {
   outline: 2px solid var(--white);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setNavIntent } from "@/effects/navIntent";
+import KineticLogo from "@/components/KineticLogo";
 import styles from "./MobileNav.module.css";
 
 /**
@@ -83,14 +84,16 @@ export default function MobileNav() {
     <div className={styles.root}>
       <header className={styles.header}>
         <Link className={styles.logoLink} href="/" aria-label="2HOT2HANDLE — Home">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className={styles.logo}
-            src="/assets/svg/logo.svg"
-            alt="2HOT2HANDLE"
-            width={183}
-            height={16}
-          />
+          <KineticLogo>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className={styles.logo}
+              src="/assets/svg/logo.svg"
+              alt="2HOT2HANDLE"
+              width={183}
+              height={16}
+            />
+          </KineticLogo>
         </Link>
 
         <button
