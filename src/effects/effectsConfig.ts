@@ -16,7 +16,7 @@ export const EFFECTS = {
   ENABLE_MOBILE_TACTILE_PRESSURE: true, // mobile-only liquid touch (press + ripple)
   ENABLE_DESKTOP_MONOGRAM_PORTAL_TRANSITION: true, // desktop-only cinematic route dive
   ENABLE_KINETIC_TITLES: true, // materialization-style title reveal on route entry
-  ENABLE_PHYSICAL_CARD: true, // desktop-only weighted tilt/parallax/shine on the Coming Soon card
+  ENABLE_PHYSICAL_CARD: true, // desktop-only weighted tilt/parallax on the Coming Soon card
   ENABLE_CURSOR_TRAIL: true, // desktop-only localized refraction cursor trail (approved zones)
 };
 
@@ -30,47 +30,83 @@ export const EFFECTS = {
 // Optional URL override ?waveform=v1|v2. All values tunable here.
 export const AUDIO_WAVEFORM = {
   variant: "V2" as "V1" | "V2",
-  columnsDesktop: 72, // spectral columns across X (desktop)
-  rowsDesktop: 26, // ordered Z rows (depth) (desktop)
-  columnsMobile: 44,
-  rowsMobile: 14,
+  // Single dot hue for the whole surface — #60A3BF (no per-frequency palette).
+  color: [0.37647, 0.63922, 0.74902] as [number, number, number],
+  // Grid — ~doubled total points (one dimension each) for a continuous mesh.
+  columnsDesktop: 136, // spectral columns across X (desktop)
+  rowsDesktop: 112, // screen-even depth rows → 136×112 = 15,232 (~5px row pitch @900)
+  columnsMobile: 84,
+  rowsMobile: 80, // 84×80 = 6,720 (screen-even rows, same geometric range)
   pointSize: 3.4, // base dot size (px, DPR-scaled)
-  widthFrac: 0.94, // surface width as a fraction of the viewport
-  heightFrac: 0.32, // vertical screen area the rows rise across (~heatmap area)
-  bottomMarginFrac: 0.05, // gap from the viewport bottom
-  ampPx: 140, // max audio Y displacement (px)
-  idleAmpPx: 16, // restrained idle wave amplitude (px) — sculptural when silent
-  idleSpeed: 0.7, // idle wave temporal speed
+  pointDepthShrink: 0.55, // how much far points shrink (perspective)
+  // --- Composition: DESKTOP (full-bleed, lowered + frontal) ---
+  widthFracDesktop: 1.6, // front width as vw fraction → ~160vw overscan
+  frontOverhangFracDesktop: 0.26, // front rows drop ~26vh below the viewport bottom
+  horizonFracDesktop: 0.36, // horizon lowered to ~36% of viewport height
+  // --- Composition: MOBILE (heavier overscan) ---
+  widthFracMobile: 1.85, // ~185vw overscan
+  frontOverhangFracMobile: 0.28, // front rows ~28vh below the viewport bottom
+  horizonFracMobile: 0.36, // horizon at ~36% of viewport height
+  // Full-bleed apron: rows whose base plane sits at/below the viewport bottom get
+  // ZERO audio/idle displacement (a flat covering apron); displacement ramps in
+  // over this many px above the bottom edge, so bass valleys/peaks can never
+  // expose the bottom-left/right corners. Per-point, in the shader.
+  coverRampPx: 70,
+  // --- Depth / faked perspective (orthographic camera) ---
   depthFront: -240, // z of the front row (behind the monogram, ahead of marquee)
   depthBack: -840, // z of the back row
-  rowRiseFrac: 0.55, // faked perspective: how much back rows rise on screen
-  rowShrink: 0.3, // faked perspective: how much back rows narrow
-  brightness: 1.15, // color intensity
+  rowShrink: 0.18, // gentle linear narrowing so every row overscans (corners covered)
+  // Rows are placed with an EVEN screen-Y pitch (linear across the row index): for
+  // an orthographic camera screen-Y is affine in world-Y, so uniform on-screen
+  // spacing = linear interpolation (the exact inverse projection — no power curve).
+  // --- Audio response (≥60% more relief than the previous 235px) ---
+  ampPx: 380, // max audio Y displacement (px)
+  spectralGain: 1.6, // lift the normalised analyser energy into usable amplitude
+  contrast: 1.35, // gamma → peak/trough separation (localised formations)
+  columnBlur: 1, // neighbour-column smoothing radius → connected hills (not needles)
+  attackRate: 22, // per-second front-profile attack (frame-rate independent)
+  releaseRate: 6, // per-second front-profile release — no flicker
+  // --- Horizontal frequency map (perceptual 20/50/30 allocation) ---
+  // Width is split into low/mid/high bands; within each, frequency is log-
+  // interpolated across its Hz range, then converted to a position into the
+  // log-spaced analyser bands. Compact powerful bass (left), rich mids (centre),
+  // airy highs (right). Boundaries are continuous in frequency → no seams.
+  lowWidthFrac: 0.2, // lows occupy the left 20% of the width
+  midWidthFrac: 0.5, // mids occupy the central 50%
+  highWidthFrac: 0.3, // highs occupy the right 30%
+  bandFreqLowHz: 43, // effective analyser band floor (~loBinFrac · Nyquist)
+  lowMaxHz: 200, // low/mid crossover
+  midMaxHz: 4000, // mid/high crossover
+  bandFreqHighHz: 9200, // effective analyser band ceiling (~hiBinFrac · Nyquist)
+  // --- Temporal history (front-to-back travelling waves) ---
+  historySeconds: 2, // visible surface = latest ~2.0s of audio (time-based)
+  historyHz: 30, // spectral snapshots captured per second (ring buffer)
+  backHeightScale: 0.6, // travelling crest keeps ~60% of its height near the back
+  heightFalloffStart: 0.4, // depth (aV) where crest-height compression begins
+  // --- Idle terrain (deterministic low-relief; also the reduced-motion surface) ---
+  idleAmpPx: 66, // restrained multi-octave terrain relief when silent (px, +60%)
+  // --- Back/horizon fade (per-point, in the shader) ---
+  fadeStart: 0.5, // depth (0 front .. 1 back) where the far fade begins → 0 at back
+  brightness: 1.2, // dot intensity
 };
 
 // ----------------------------------------------------------------- CURSOR TRAIL
-// A very subtle, refracted cursor trace that appears ONLY inside approved zones
-// on DESKTOP pointers: the central 3D glass, relevant imagery, and the primary
-// nav links. One decoupled 2D canvas overlay (pointer-events:none, DPR-clamped),
-// z-index 4 so it sits above the scene/imagery but BELOW the text chrome (nav is
-// z-5) → it can never reduce text readability. Outside the zones nothing is
-// added and the trace fades out within `lifeMs`. Not neon / particles / comet /
-// custom cursor — a thin cool line with a tiny transverse "refraction" ghost.
-// No touch/mobile, no reduced motion (both opt out entirely).
+// A soft, diffused #73F608 glow that renders ONLY on the visible monogram
+// silhouette (Figma "mous trail": ~22px core, ~110px blurry halo). It lives
+// inside the Monogram WebGL pass and is STENCIL-masked to the real monogram
+// geometry every frame — rotation-aware, cavities excluded, no rectangular zone.
+// Samples spawn only while a raycast hits the monogram and fade within `lifeMs`.
+// DESKTOP fine-pointer only; no touch/mobile, no reduced motion (both opt out).
+// GPU: one THREE.Points ring buffer, reused typed arrays, DPR-clamped.
 export const TRAIL = {
-  // Approved DOM zones, matched with event.target.closest(). Primary nav links
-  // (NOT the target=_blank social icons) + imagery. The central glass is added
-  // as a geometric region below (Home only) because the scene canvas is
-  // pointer-events:none and can't be hit-tested via the event target.
-  selector: 'img, nav a:not([target="_blank"])',
-  glassRegion: { wFrac: 0.46, hFrac: 0.86 }, // centered box ≈ the monogram (Home only)
-  lifeMs: 230, // 200–250ms trace lifetime
-  maxPoints: 40, // ring-buffer cap (no unbounded growth)
-  minMovePx: 2.5, // ignore sub-pixel jitter between samples
-  lineWidth: 1.4, // thin
-  baseOpacity: 0.14, // extremely restrained peak alpha
-  refractOffsetPx: 1.4, // tiny transverse displacement → refraction hint (not a comet)
-  color: [198, 214, 255] as [number, number, number], // cool white-blue (#C6D6FF)
+  coreSizePx: 22, // bright core diameter (Figma nominal node)
+  haloSizePx: 110, // total soft halo footprint (point-sprite size)
+  coreFrac: 0.2, // core radius as a fraction of the halo (≈22/110)
+  color: [0.45098, 0.96471, 0.03137] as [number, number, number], // #73F608
+  lifeMs: 280, // per-sample fade lifetime
+  maxPoints: 56, // ring-buffer cap (no unbounded growth)
+  minMovePx: 2, // ignore sub-pixel jitter between samples
+  peakOpacity: 0.5, // peak alpha of a fresh sample — elegant, not neon-solid
   dprMax: 2, // device-pixel-ratio clamp
 };
 
@@ -78,8 +114,8 @@ export const TRAIL = {
 // Turns the bottom-right "Coming Soon" release previewer into a physical,
 // editorial object on DESKTOP ONLY (mobile is untouched — the card is hidden
 // there). A weighted (heavy, slow) tilt of ≤2°, an opposite image-crop parallax
-// for depth, and a SINGLE glass/plastic reflection sweep when hover begins (never
-// looping). All driven by one rAF writing inline transforms from lerped targets
+// for depth (no moving reflection sweep). All driven by one rAF writing inline
+// transforms from lerped targets
 // — no React re-render per frame — and it settles precisely back to the original
 // state on leave. Reduced motion / non-hover pointers → none of this attaches;
 // the existing collapsed/expanded reveal (now staggered line-by-line) still runs.
@@ -90,7 +126,6 @@ export const CARD = {
   perspectivePx: 900, // 3D perspective depth
   ease: 0.09, // per-frame lerp toward target (small = heavier/slower response)
   settleEps: 0.015, // snap-to-rest threshold (deg/px) → exact original state
-  shineMs: 720, // single reflection sweep duration (once per hover-enter)
   revealStaggerMs: 70, // per-line delay for the masked line-by-line copy reveal
 };
 

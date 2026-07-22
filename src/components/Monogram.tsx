@@ -17,6 +17,10 @@ import {
   type SpectralWaveformV2,
 } from "@/effects/spectralWaveformV2";
 import {
+  createMonogramCursorTrail,
+  type MonogramCursorTrail,
+} from "@/effects/monogramCursorTrail";
+import {
   getBands as getAudioBands,
   getEnv as getAudioEnv,
   getHeatmap as getAudioHeatmap,
@@ -259,6 +263,7 @@ export default function Monogram({
         canvas,
         antialias: true,
         alpha: true,
+        stencil: true, // cursor-trail silhouette mask (default true; explicit here)
       });
       renderer.setClearColor(0x000000, 0);
       // Mobile renders at 1.5× device pixels (crisp, but not the full native
@@ -440,6 +445,7 @@ export default function Monogram({
       const waveformVariant: "V1" | "V2" =
         wfQuery === "v1" ? "V1" : wfQuery === "v2" ? "V2" : AUDIO_WAVEFORM.variant;
       let waveformV2: SpectralWaveformV2 | null = null;
+      let cursorTrail: MonogramCursorTrail | null = null;
       // Debug toggle: ?glass=legacy forces the legacy transmission material on
       // mobile so legacy vs custom can be compared. Not surfaced in the UI.
       const forceLegacy =
@@ -769,6 +775,50 @@ export default function Monogram({
           dpr: Math.min(window.devicePixelRatio, maxDpr()),
         });
         scene.add(waveformV2.object3D);
+      }
+
+      // --- Cursor trail (desktop, monogram-only) -----------------------------
+      // Soft #73F608 glow drawn as a final additive pass, STENCIL-masked to the
+      // real monogram silhouette (rotation-aware, cavities excluded). Desktop
+      // fine-pointer only; reduced motion + touch opt out. Reuses this renderer/
+      // camera/mesh; does NOT touch the glass shader or refraction passes.
+      const finePointer =
+        typeof window !== "undefined" &&
+        window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+      const stencilOK = !!renderer
+        .getContext()
+        .getContextAttributes()?.stencil;
+      if (
+        EFFECTS.ENABLE_CURSOR_TRAIL &&
+        !isMobile &&
+        finePointer &&
+        !prefersReducedMotion &&
+        stencilOK
+      ) {
+        cursorTrail = createMonogramCursorTrail(THREE, {
+          renderer,
+          camera,
+          monogram: mesh,
+          vw,
+          vh,
+          dpr: Math.min(window.devicePixelRatio, maxDpr()),
+        });
+      }
+      const trailRaycaster = new THREE.Raycaster();
+      const trailNdc = new THREE.Vector2();
+      const onTrailPointer = (e: PointerEvent) => {
+        if (!cursorTrail) return;
+        trailNdc.set(
+          (e.clientX / window.innerWidth) * 2 - 1,
+          -(e.clientY / window.innerHeight) * 2 + 1,
+        );
+        trailRaycaster.setFromCamera(trailNdc, camera);
+        if (trailRaycaster.intersectObject(mesh, false).length > 0) {
+          cursorTrail.sample(e.clientX, e.clientY);
+        }
+      };
+      if (cursorTrail) {
+        window.addEventListener("pointermove", onTrailPointer, { passive: true });
       }
 
       // --- Portal cavity target marker (debug only) --------------------------
@@ -1368,7 +1418,14 @@ export default function Monogram({
         // Skip the GPU render when the scene is fully hidden AND idle (internal
         // desktop routes at rest) — the loop + audioTick keep running so the
         // marquee phase / player bar stay live and never jump on resume.
-        if (!(pv.presence < 0.004 && !portalActive)) renderFrame();
+        const didRenderFrame = !(pv.presence < 0.004 && !portalActive);
+        if (didRenderFrame) renderFrame();
+        // Cursor trail: age samples always; the masked overlay pass only runs when
+        // the scene actually rendered this frame (needs the live silhouette).
+        if (cursorTrail) {
+          cursorTrail.update(dt / 1000);
+          if (didRenderFrame) cursorTrail.render();
+        }
 
         // one-time tier downgrade from measured average frame time
         if (!tierLocked) {
@@ -1638,6 +1695,7 @@ export default function Monogram({
         }
         applyFit();
         waveformV2?.resize(vw, vh);
+        cursorTrail?.resize(vw, vh, Math.min(window.devicePixelRatio, maxDpr()));
       };
       window.addEventListener("resize", onResize);
       // Orientation changes and Safari's dynamic viewport (URL/tool bars showing
@@ -1701,6 +1759,7 @@ export default function Monogram({
         window.removeEventListener("orientationchange", onResizeCoalesced);
         window.visualViewport?.removeEventListener("resize", onResizeCoalesced);
         window.removeEventListener("pointermove", onFieldPointer);
+        window.removeEventListener("pointermove", onTrailPointer);
         // Hand the single audio rAF back to the engine (player bar keeps working
         // on routes without the WebGL scene).
         setAudioDriver(false);
@@ -1730,6 +1789,7 @@ export default function Monogram({
         envRT.texture.dispose();
         pmrem.dispose();
         waveformV2?.dispose();
+        cursorTrail?.dispose();
         renderer.dispose();
       };
     })();

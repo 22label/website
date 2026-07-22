@@ -5,8 +5,8 @@ import DesktopRail from "@/components/DesktopRail";
 import MobileBottom from "@/components/MobileBottom";
 import EffectsDebugPanel from "@/components/EffectsDebugPanel";
 import PersistentScene from "@/components/PersistentScene";
-import CursorTrail from "@/components/CursorTrail";
 import LogoLink from "@/components/LogoLink";
+import KineticLogo from "@/components/KineticLogo";
 import styles from "./Shell.module.css";
 
 /**
@@ -21,23 +21,24 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           only). Sits behind everything so the portal transition can dive it. */}
       <PersistentScene />
 
-      {/* Localized cursor ghost trail — decoupled 2D overlay, desktop-only,
-          self-gated; renders only inside approved zones. */}
-      <CursorTrail />
+      {/* Cursor trail now lives inside the Monogram WebGL pass (desktop-only),
+          stencil-masked to the real monogram silhouette. */}
 
       {children}
 
       {/* TOP-LEFT — logo (links Home, portal-aware) + subtitle */}
       <header className={styles.topLeft}>
         <LogoLink className={styles.logoLink}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className={styles.logo}
-            src="/assets/svg/logo.svg"
-            alt="2HOT2HANDLE"
-            width={274}
-            height={24}
-          />
+          <KineticLogo>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className={styles.logo}
+              src="/assets/svg/logo.svg"
+              alt="2HOT2HANDLE"
+              width={274}
+              height={24}
+            />
+          </KineticLogo>
         </LogoLink>
         <p className={styles.subtitle}>EST. 2026 / BCN [ES]</p>
       </header>

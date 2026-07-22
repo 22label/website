@@ -1,0 +1,12 @@
+/**
+ * Layout-neutral host wrapper for the header wordmark's kinetic hover burst.
+ * The actual animation comes from KineticTitle.module.css (.base / .slice +
+ * ktBase / ktSlice keyframes) — this only keeps the wrapped <img> pixel-identical
+ * at rest: inline-flex with no baseline gap so the mark sits exactly where the
+ * bare <img> did, and a positioning context for the absolutely-placed slices.
+ */
+.logoHost {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}

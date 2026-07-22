@@ -15,9 +15,9 @@ import styles from "./ReleasePreviewer.module.css";
  * below the release copy.
  *
  * PHYSICAL CARD (desktop hover only): an inner `.card` wrapper gets a weighted
- * ≤2° tilt + an opposite image-crop parallax + a single reflection sweep on
- * hover-enter, driven by ONE rAF writing inline transforms from lerped targets
- * (no React re-render per frame) and settling exactly back to rest on leave. The
+ * ≤2° tilt + an opposite image-crop parallax, driven by ONE rAF writing inline
+ * transforms from lerped targets (no React re-render per frame) and settling
+ * exactly back to rest on leave. The
  * tilt lives on `.card`, NOT on `.release`, so the fixed `.rightGradient` keeps
  * the viewport as its containing block. Reduced motion or a non-hover pointer →
  * nothing attaches; the CSS reveal still runs.
@@ -45,8 +45,6 @@ export default function ReleasePreviewer() {
     // Desktop hover pointers only; reduced motion opts out entirely.
     if (!window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    card.style.setProperty("--card-shine-ms", `${CARD.shineMs}ms`);
 
     const cur = { rx: 0, ry: 0, px: 0, py: 0, h: 0 };
     const tgt = { rx: 0, ry: 0, px: 0, py: 0, h: 0 };
@@ -92,11 +90,6 @@ export default function ReleasePreviewer() {
     const onEnter = () => {
       hovering = true;
       tgt.h = 1;
-      // Single reflection sweep — restart on each fresh hover (remove → reflow →
-      // set) so it plays once per enter and never loops. No React re-render.
-      card.removeAttribute("data-shine");
-      void card.offsetWidth;
-      card.setAttribute("data-shine", "1");
       ensure();
     };
     const onMove = (ev: PointerEvent) => {
@@ -116,7 +109,6 @@ export default function ReleasePreviewer() {
       hovering = false;
       tgt.rx = tgt.ry = tgt.px = tgt.py = 0;
       tgt.h = 0;
-      card.removeAttribute("data-shine");
       ensure();
     };
 
@@ -129,7 +121,6 @@ export default function ReleasePreviewer() {
       root.removeEventListener("pointerleave", onLeave);
       if (raf) cancelAnimationFrame(raf);
       clearTransforms();
-      card.removeAttribute("data-shine");
     };
   }, []);
 
@@ -174,8 +165,6 @@ export default function ReleasePreviewer() {
             height={220}
           />
         </div>
-
-        <span className={styles.shine} aria-hidden="true" />
       </div>
     </section>
   );
