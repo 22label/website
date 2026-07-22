@@ -4,6 +4,7 @@ import "./globals.css";
 import Shell from "@/components/Shell";
 import AudioProvider from "@/components/AudioProvider";
 import PortalNav from "@/components/PortalNav";
+import LandscapeBlocker from "@/components/LandscapeBlocker";
 
 /**
  * Clash Display (Fontshare, ITF Free Font License) — self-hosted under
@@ -69,6 +70,10 @@ export default function RootLayout({
             <Shell>{children}</Shell>
           </PortalNav>
         </AudioProvider>
+        {/* Phone-landscape blocker — mounted at the root, OUTSIDE the desktop/
+            mobile layout selection, so it can cover the whole site regardless of
+            which layout is active. */}
+        <LandscapeBlocker />
       </body>
     </html>
   );

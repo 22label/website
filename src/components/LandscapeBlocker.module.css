@@ -1,0 +1,40 @@
+/* Full-viewport phone-landscape blocker. Fully opaque, above everything, blocks
+   all pointer/touch on the UI underneath. 2H2H treatment (Figma 230:779): diagonal
+   charcoal→black gradient, Clash Display, uppercase, centred. */
+.blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(
+    116.8deg,
+    rgb(44, 52, 62) 17.843%,
+    rgb(0, 0, 0) 83.03%
+  );
+  pointer-events: auto; /* swallow all interaction with the site behind it */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.copy {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-family: var(--font-clash-display), sans-serif;
+  font-weight: 500; /* Clash Display Medium (Figma 230:887) */
+  font-size: 32px;
+  letter-spacing: 3.52px; /* 11% of 32px */
+  line-height: 64px; /* Figma 230:887 leading */
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.line {
+  display: block;
+  white-space: nowrap;
+}

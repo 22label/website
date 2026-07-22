@@ -1,13 +1,14 @@
 /* Interactive audio-filter MIXER (desktop only). Fixed bottom-left, in the same
-   persistent layer as the player rail: left:64, and bottom:168 so there is exactly
-   48px of clear space above the 56px PLAY pill (which sits at bottom:64). Figma
-   230:679: 191×114, 1px white border, 24px radius, transparent, 16/24/24/24
-   padding, 32px gap. Only the knobs capture pointer events (the transparent body
-   and border never block the waveform behind). */
+   persistent layer as the player rail: left:64, and bottom:144 so there is exactly
+   24px of clear space above the 56px PLAY pill (which sits at bottom:64) — the
+   MIXER and 191px pill form one aligned control group. Figma 230:679: 191×114,
+   1px white border, 24px radius, transparent, 16/24/24/24 padding, 32px gap. Only
+   the knobs capture pointer events (the transparent body/border never block the
+   waveform behind). */
 .mixer {
   position: fixed;
   left: 64px;
-  bottom: 168px;
+  bottom: 144px;
   z-index: 6;
   box-sizing: border-box;
   width: 191px;
@@ -20,6 +21,14 @@
   flex-direction: row;
   gap: 32px;
   pointer-events: none;
+  transition: background 0.2s ease; /* subtle; never gates the audio/filter */
+}
+
+/* Active while MUSIC IS PLAYING → black-50% fill, matching the playing PLAY pill
+   (Figma 230:961). Driven by the shared playback state, not the knob positions.
+   Border/radius/size/padding/alignment unchanged. */
+.mixer.active {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 /* Desktop-only (the component also gates its mount to >=768px). */
@@ -31,6 +40,7 @@
 
 .filter {
   width: 56px;
+  flex: none; /* never shrink the 56px column */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -51,12 +61,13 @@
 .knob {
   width: 56px;
   height: 56px;
+  flex: none; /* exact 56×56, never reduced by flexbox */
   padding: 0;
   margin: 0;
   border: 0;
   background: transparent;
   display: block;
-  cursor: ns-resize; /* vertical drag increases/decreases the filter */
+  cursor: ns-resize; /* press-hold-scroll or vertical drag */
   pointer-events: auto;
   touch-action: none; /* no page scroll while manipulating the knob */
   user-select: none;
@@ -79,8 +90,9 @@
   will-change: transform;
 }
 
-/* Active (amount > tolerance): green glow on the knob SILHOUETTE — drop-shadow
-   follows the scalloped shape (no square edges). Figma 230:624. */
-.active .knobImg {
+/* Active (this knob's own amount > tolerance): green glow on the knob SILHOUETTE —
+   drop-shadow follows the scalloped shape (no square edges). Figma 230:624. Scoped
+   to .knob so the container's own .active (black fill) never glows neutral knobs. */
+.knob.active .knobImg {
   filter: drop-shadow(0 0 16px rgba(115, 246, 8, 0.66));
 }

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setHpAmount, setLpAmount } from "@/effects/audioReactive";
+import { useAudio } from "./AudioProvider";
 import styles from "./Mixer.module.css";
 
 /**
@@ -10,16 +11,24 @@ import styles from "./Mixer.module.css";
  * graph BEFORE the analyser, so the waveform reacts to the actual filtered audio.
  *
  * Knob model: a normalized 0..1 effect amount, mapped to a −120°..+120° arc
- * (240° travel, clamped — never wraps). HP neutral is −120° (≈8 o'clock, amount 0);
- * LP neutral is +120° (≈4 o'clock, amount 0). Increasing either amount pushes the
- * indicator toward the opposite side. Pointer drag up / wheel up increases; arrows
- * step; Home = neutral, End = max. Pointer capture keeps the knob grabbed off its
- * bounds. Active (amount > tolerance) → green silhouette glow.
+ * (clamped). HP neutral −120° (≈8 o'clock), LP neutral +120° (≈4 o'clock); both
+ * neutral = inaudible. Each knob's Active (amount > tolerance) → green silhouette
+ * glow, independent per knob. The CONTAINER's Active fill (black-50%) follows
+ * MUSIC PLAYBACK — not the knob positions: it turns on the instant playback
+ * starts and off when it stops, regardless of where the knobs sit.
+ *
+ * Interaction lifecycle (strict, no latching): pointerdown press-and-HOLD begins
+ * control; while held, vertical drag OR wheel/trackpad scroll adjusts the value;
+ * pointerup/cancel/lostpointercapture/window-blur/unmount ends it immediately and
+ * releases pointer capture. Wheel is consumed (page scroll prevented) ONLY while
+ * held; an unheld knob ignores the wheel and the page scrolls normally. A bare
+ * click (no move/scroll) changes nothing and never enters a persistent mode.
+ * Keyboard: role="slider" + arrows / Home (neutral) / End (max).
  */
 
 const ACTIVE_EPS = 0.005;
-const DRAG_SENS = 1 / 170; // px of vertical drag → amount (full travel ≈170px)
-const WHEEL_STEP = 0.04;
+const DRAG_SENS = 1 / 170; // px of vertical travel → amount (full sweep ≈170px)
+const WHEEL_STEP = 0.04; // per wheel notch/trackpad tick
 const KEY_STEP = 0.05;
 
 type Kind = "hp" | "lp";
@@ -39,65 +48,99 @@ function Knob({
   apply: (a: number) => void;
 }) {
   const [amount, setAmount] = useState(0);
-  const amountRef = useRef(0);
-  useEffect(() => {
-    amountRef.current = amount; // mirror for event handlers (read outside render)
-  }, [amount]);
+  const valueRef = useRef(0); // synchronous current value for event handlers
   const knobRef = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: number; startY: number; startAmount: number } | null>(
-    null,
-  );
+  const heldRef = useRef(false);
+  const pointerIdRef = useRef<number | null>(null);
+  const lastYRef = useRef(0);
+
+  // Input direction. HP engages by scrolling/dragging/arrowing UP; LP is the
+  // mirror image of HP, so it engages DOWN (scroll/drag down or ArrowDown) and
+  // returns to neutral UP. Only the gesture→delta sign flips — the 0..1 `amount`
+  // and everything derived from it (rotation, filter value, active, aria) are
+  // unchanged, so all stay perfectly in sync.
+  const dir = kind === "hp" ? 1 : -1;
 
   const set = useCallback(
     (a: number) => {
       const c = a < 0 ? 0 : a > 1 ? 1 : a; // clamp 0..1
+      valueRef.current = c;
       setAmount(c);
       apply(c); // drive the real filter (smoothly automated in the audio layer)
     },
     [apply],
   );
 
-  // Native, non-passive wheel listener so scrolling over the knob adjusts it and
-  // does NOT scroll the page (React's onWheel can't reliably preventDefault).
+  // End the hold: idempotent, always releases pointer capture + clears state.
+  const endHold = useCallback(() => {
+    if (!heldRef.current) return;
+    heldRef.current = false;
+    const el = knobRef.current;
+    const pid = pointerIdRef.current;
+    pointerIdRef.current = null;
+    if (el && pid !== null) {
+      try {
+        el.releasePointerCapture(pid);
+      } catch {
+        /* already released */
+      }
+    }
+  }, []);
+
+  // Wheel: only while HELD → adjust + preventDefault (block page scroll). When not
+  // held, pass through so the page scrolls normally. Native + non-passive so
+  // preventDefault works.
   useEffect(() => {
     const el = knobRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (!heldRef.current) return;
       e.preventDefault();
-      set(amountRef.current + (e.deltaY < 0 ? WHEEL_STEP : -WHEEL_STEP));
+      // deltaY<0 is a scroll-UP gesture; `dir` maps it to +step (HP) or −step (LP).
+      set(valueRef.current + dir * (e.deltaY < 0 ? WHEEL_STEP : -WHEEL_STEP));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [set]);
+  }, [set, dir]);
+
+  // Window blur (and unmount cleanup) must always clear the interaction state.
+  useEffect(() => {
+    const onBlur = () => endHold();
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("blur", onBlur);
+      endHold();
+    };
+  }, [endHold]);
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = {
-      id: e.pointerId,
-      startY: e.clientY,
-      startAmount: amountRef.current,
-    };
-    e.preventDefault(); // no text selection / focus scroll
+    if (heldRef.current) return; // ignore extra pointers/buttons
+    heldRef.current = true;
+    pointerIdRef.current = e.pointerId;
+    lastYRef.current = e.clientY;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* capture unsupported — window listeners still track it */
+    }
+    // No preventDefault → the knob still focuses (keyboard control preserved).
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d || d.id !== e.pointerId) return;
-    set(d.startAmount + (d.startY - e.clientY) * DRAG_SENS); // up = increase
+    if (!heldRef.current || e.pointerId !== pointerIdRef.current) return;
+    const dy = lastYRef.current - e.clientY; // drag up = +dy (incremental)
+    lastYRef.current = e.clientY;
+    // `dir` mirrors LP: drag up increases HP but returns LP toward neutral.
+    if (dy !== 0) set(valueRef.current + dir * dy * DRAG_SENS);
   };
-  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (drag.current && drag.current.id === e.pointerId) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch {
-        /* already released */
-      }
-      drag.current = null;
-    }
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerId === pointerIdRef.current) endHold();
   };
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     let handled = true;
-    if (e.key === "ArrowUp" || e.key === "ArrowRight") set(amountRef.current + KEY_STEP);
-    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") set(amountRef.current - KEY_STEP);
+    // Up/Right = engage gesture on HP; `dir` mirrors it for LP (Down engages LP,
+    // Up returns it toward neutral). Home = neutral, End = max — absolute for both.
+    if (e.key === "ArrowUp" || e.key === "ArrowRight") set(valueRef.current + dir * KEY_STEP);
+    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") set(valueRef.current - dir * KEY_STEP);
     else if (e.key === "Home") set(0);
     else if (e.key === "End") set(1);
     else handled = false;
@@ -121,14 +164,15 @@ function Knob({
         aria-valuetext={`${pct}%`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onLostPointerCapture={endHold}
         onKeyDown={onKeyDown}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className={styles.knobImg}
-          src="/assets/icons/mixer-knob.svg"
+          src="/assets/icons/mixer-knob.png"
           alt=""
           draggable={false}
           style={{ transform: `rotate(${rotationFor(kind, amount).toFixed(2)}deg)` }}
@@ -139,8 +183,15 @@ function Knob({
 }
 
 export default function Mixer() {
+  // Container Active follows the canonical playback state (AudioProvider) — the
+  // same flag the PLAY MUSIC pill uses — so the mixer fills black-50% at the exact
+  // moment playback starts and clears when it stops. Knob positions never gate it.
+  const { playing } = useAudio();
   return (
-    <div className={styles.mixer} aria-label="Audio filter mixer">
+    <div
+      className={`${styles.mixer} ${playing ? styles.active : ""}`}
+      aria-label="Audio filter mixer"
+    >
       <Knob kind="hp" label="HP" apply={setHpAmount} />
       <Knob kind="lp" label="LP" apply={setLpAmount} />
     </div>

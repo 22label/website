@@ -53,7 +53,9 @@ export default function MusicPlayerControl({
           {/* One slot holds PLAY (OFF) and the marquee title (ON); they
               crossfade in place so they never overlap and never shift. */}
           <span className={styles.labelSlot}>
-            <span className={styles.playLabel}>PLAY</span>
+            <span className={styles.playLabel}>
+              {variant === "desktop" ? "PLAY TO MIX" : "PLAY"}
+            </span>
             <span className={styles.titleClip}>
               <span className={styles.marquee}>
                 <span className={styles.titleText}>{TITLE}</span>

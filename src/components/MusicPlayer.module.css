@@ -52,6 +52,24 @@
 .toggle:hover {
   background: #ededed; /* OFF: subtle */
 }
+
+/* DESKTOP: the pill is a fixed 191px — exactly the MIXER container width, same
+   left:64 anchor → pixel-aligned left/right edges. A fixed label slot means the
+   pill never resizes/shifts when playback toggles (PLAY TO MIX ⇄ track title
+   crossfade in place). Mobile keeps its content-driven animated width.
+
+   The icon + label are centred in the pill AS ONE GROUP (Figma 220:411):
+   justify-content centres the whole `.row`, and the slot hugs "PLAY TO MIX"
+   (≈103px) so the group is narrower than the 143px inner width and therefore
+   visibly centres (icon nudges in with the text — never text-only centring). */
+.desktop .toggle {
+  width: 191px;
+  justify-content: center;
+}
+.desktop .labelSlot,
+.desktop .toggle[data-state="on"] .labelSlot {
+  width: 104px; /* hugs "PLAY TO MIX"; constant OFF↔ON so nothing shifts on toggle */
+}
 .toggle:focus {
   outline: none;
 }

@@ -2,12 +2,12 @@
    Anchored bottom-right; grows up + left. The corner never moves. */
 .release {
   position: fixed;
-  bottom: var(--corner-gap);
-  right: var(--corner-gap);
+  bottom: var(--corner-gap); /* exactly 64px from the bottom edge */
+  right: var(--corner-gap); /* exactly 64px from the right edge */
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 24px;
+  gap: 16px;
   width: fit-content;
   text-align: right;
   z-index: var(--z-player); /* above the gradient child; below the menu */
@@ -29,7 +29,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 24px;
+  gap: 16px; /* base spacing between the COMING SOON group and the cover (Figma 204:7101) */
   will-change: transform;
 }
 
@@ -93,6 +93,8 @@
    sufficiently collapsed. It is never overlaid on the expanded copy. */
 .comingSoon {
   color: var(--muted);
+  font-size: 16px; /* Figma 204:7105 — exactly 16px */
+  letter-spacing: 1.76px; /* 11% of 16px (Figma) */
   white-space: nowrap;
   overflow: hidden;
   max-height: 24px;
