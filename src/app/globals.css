@@ -11,20 +11,12 @@
      they render identically. Reference: the bottom-left info bar. */
   --bar-thickness: 1px;
 
-  /* Background heat — ONLY the dark (second) stop of the page gradient moves,
-     driven by the SAME normalized heatProgress as the 3D monogram (written by
-     the Monogram render loop). heat 0 => #000000, heat 1 => #580001 (88,0,1).
-     The first stop #2C343E stays fixed. */
-  --heat-r: 0;
-  --heat-g: 0;
-  --heat-b: 0;
-
-  /* Exact dark gradient exported from Figma (dark stop = heat-driven). */
-  --page-gradient: linear-gradient(
-    152.689deg,
-    rgb(44, 52, 62) 17.843%,
-    rgb(var(--heat-r), var(--heat-g), var(--heat-b)) 83.03%
-  );
+  /* Desktop DEFAULT background — the EXACT Figma radial gradient (node 243:409),
+     inlined as a vector SVG (not a raster). Used on non-Home routes and as the
+     pre-WebGL fallback; on Home the WebGL marquee plane draws the equivalent
+     radial plus its Heat variant. Heat is intentionally NOT applied in CSS —
+     non-Home routes have no monogram heat interaction, so they stay on Default. */
+  --page-gradient: url("data:image/svg+xml,%3Csvg%20viewBox%3D'0%200%201728%20976'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20preserveAspectRatio%3D'none'%3E%3Crect%20x%3D'0'%20y%3D'0'%20height%3D'100%25'%20width%3D'100%25'%20fill%3D'url(%23grad)'%20opacity%3D'1'%2F%3E%3Cdefs%3E%3CradialGradient%20id%3D'grad'%20gradientUnits%3D'userSpaceOnUse'%20cx%3D'0'%20cy%3D'0'%20r%3D'10'%20gradientTransform%3D'matrix(24.825%2048.075%20-85.116%2043.952%20865.75%20495.25)'%3E%3Cstop%20stop-color%3D'rgba(44%2C52%2C62%2C1)'%20offset%3D'0'%2F%3E%3Cstop%20stop-color%3D'rgba(22%2C26%2C31%2C1)'%20offset%3D'0.5'%2F%3E%3Cstop%20stop-color%3D'rgba(11%2C13%2C15%2C1)'%20offset%3D'0.75'%2F%3E%3Cstop%20stop-color%3D'rgba(6%2C6%2C8%2C1)'%20offset%3D'0.875'%2F%3E%3Cstop%20stop-color%3D'rgba(0%2C0%2C0%2C1)'%20offset%3D'1'%2F%3E%3C%2FradialGradient%3E%3C%2Fdefs%3E%3C%2Fsvg%3E");
 
   /* Global interface typography */
   --ui-font-size: 16px;
@@ -46,13 +38,9 @@
   --page-content-y: clamp(96px, 13.1148dvh, 220px);
   --page-content-max-width: calc(100vw - var(--page-content-x) - 64px);
 
-  /* Mobile background gradient angle (desktop keeps --page-gradient). Same
-     heat-driven dark stop. */
-  --mobile-gradient: linear-gradient(
-    116.8deg,
-    rgb(44, 52, 62) 17.843%,
-    rgb(var(--heat-r), var(--heat-g), var(--heat-b)) 83.03%
-  );
+  /* Mobile DEFAULT background — the EXACT Figma radial gradient (node 243:565),
+     portrait-specific geometry. Default-only (see --page-gradient note). */
+  --mobile-gradient: url("data:image/svg+xml,%3Csvg%20viewBox%3D'0%200%20375%20812'%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20preserveAspectRatio%3D'none'%3E%3Crect%20x%3D'0'%20y%3D'0'%20height%3D'100%25'%20width%3D'100%25'%20fill%3D'url(%23grad)'%20opacity%3D'1'%2F%3E%3Cdefs%3E%3CradialGradient%20id%3D'grad'%20gradientUnits%3D'userSpaceOnUse'%20cx%3D'0'%20cy%3D'0'%20r%3D'10'%20gradientTransform%3D'matrix(5.3874%2039.997%20-18.471%2036.567%20187.88%20412.03)'%3E%3Cstop%20stop-color%3D'rgba(44%2C52%2C62%2C1)'%20offset%3D'0'%2F%3E%3Cstop%20stop-color%3D'rgba(22%2C26%2C31%2C1)'%20offset%3D'0.5'%2F%3E%3Cstop%20stop-color%3D'rgba(11%2C13%2C15%2C1)'%20offset%3D'0.75'%2F%3E%3Cstop%20stop-color%3D'rgba(6%2C6%2C8%2C1)'%20offset%3D'0.875'%2F%3E%3Cstop%20stop-color%3D'rgba(0%2C0%2C0%2C1)'%20offset%3D'1'%2F%3E%3C%2FradialGradient%3E%3C%2Fdefs%3E%3C%2Fsvg%3E");
 
   /* Real rendered height of the shared mobile bottom section — published by
      MobileBottom at runtime; this is only the fallback used before it mounts. */
@@ -79,7 +67,10 @@ body {
 
 body {
   color: var(--white);
-  background: var(--page-gradient) fixed;
+  /* #000 base under the SVG avoids any transparent/black flash before it paints;
+     100% 100% stretches the gradient to the viewport (matches the Figma
+     preserveAspectRatio='none' and the WebGL plane). */
+  background: #000 var(--page-gradient) center / 100% 100% no-repeat fixed;
   font-family: var(--font-clash-display), "Helvetica Neue", Arial, sans-serif;
   font-size: var(--ui-font-size);
   font-weight: 400;
@@ -98,7 +89,7 @@ body {
     height: 100dvh;
   }
   body {
-    background: var(--mobile-gradient) fixed;
+    background: #000 var(--mobile-gradient) center / 100% 100% no-repeat fixed;
   }
 }
 

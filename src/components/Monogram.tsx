@@ -74,6 +74,32 @@ const COOLDOWN_DURATION_MS = 1000; // full cool-down back to the cold state
 const SCROLL_CONTINUITY_MS = 280; // gap under which scrolling counts as continuous
 // Frost — the monogram turns progressively blurry only near max heat.
 const BLUR_START = 0.78; // heatProgress at which frost begins (last stretch)
+
+// Figma background gradients (243:409/481 desktop, 243:565/536 mobile). Each is a
+// rotated-ellipse SVG radialGradient (userSpaceOnUse, r=10). Default+Heat share the
+// center/reference-frame per viewport; only the gradientTransform 2x2 (and colours)
+// differ — and on MOBILE the Heat matrix is a dedicated portrait composition. Each
+// `def`/`heat` is [a, b, c, d] of the matrix(a b c d e f); the shader gets the 2x2
+// INVERSE so it can map a fragment back into gradient space and read the offset.
+const BG_GEO = {
+  desktop: {
+    refSize: [1728, 976],
+    center: [865.75, 495.25],
+    def: [24.825, 48.075, -85.116, 43.952],
+    heat: [24.825, 48.075, -85.116, 43.952],
+  },
+  mobile: {
+    refSize: [375, 812],
+    center: [187.88, 412.03],
+    def: [5.3874, 39.997, -18.471, 36.567],
+    heat: [4.012, 38.097, -41.524, 4.3729], // dedicated portrait Heat geometry
+  },
+} as const;
+// Inverse of L=[[a,c],[b,d]] -> [m00,m01,m10,m11] for (Linv * q) in the shader.
+function bgLinv([a, b, c, d]: readonly number[]): [number, number, number, number] {
+  const det = a * d - c * b;
+  return [d / det, -c / det, -b / det, a / det];
+}
 const BLUR_MAX_ADD = 0.016; // extra refraction-blur (UV) added on top of base at full heat
 
 // RGB glitch
@@ -96,7 +122,14 @@ const MARQUEE_FRAGMENT = /* glsl */ `
   uniform float uOffset;
   uniform float uGroupW;
   uniform float uBandH;
-  uniform vec3 uDarkStop; // heat-driven second stop: #000000 -> #580001
+  // Background radial gradient (Figma 243:409/481 desktop, 243:565/536 mobile).
+  // Two rotated-ellipse endpoints (Default + Heat) evaluated per fragment and
+  // cross-faded by uBgHeat, so Default->Heat tracks the continuous monogram heat.
+  uniform vec2 uBgRefSize;  // Figma reference frame (1728x976 / 375x812)
+  uniform vec2 uBgCenter;   // gradient center in reference space (matrix e,f)
+  uniform vec4 uBgLinvDef;  // inverse 2x2 of the Default gradientTransform (m00,m01,m10,m11)
+  uniform vec4 uBgLinvHeat; // inverse 2x2 of the Heat gradientTransform
+  uniform float uBgHeat;    // eased heat progress 0..1 (Default -> Heat)
   // Frequency Field (all 0 when the feature is off -> identical output) ---------
   uniform vec2 uFieldPos;     // normalized, y-down (0..1)
   uniform float uFieldStrength;
@@ -119,14 +152,40 @@ const MARQUEE_FRAGMENT = /* glsl */ `
   uniform vec3 uHmC2;         // mid (yellow)
   uniform vec3 uHmC3;         // high (orange)
   uniform vec3 uHmC4;         // peak (red)
+  // Exact Figma stop palettes, piecewise-linear like the SVG radialGradient stops.
+  vec3 bgDefaultStops(float t) {
+    vec3 c0 = vec3(44.0, 52.0, 62.0) / 255.0;
+    vec3 c1 = vec3(22.0, 26.0, 31.0) / 255.0;
+    vec3 c2 = vec3(11.0, 13.0, 15.0) / 255.0;
+    vec3 c3 = vec3(6.0, 6.0, 8.0) / 255.0;
+    vec3 c4 = vec3(0.0);
+    if (t < 0.5) return mix(c0, c1, t / 0.5);
+    if (t < 0.75) return mix(c1, c2, (t - 0.5) / 0.25);
+    if (t < 0.875) return mix(c2, c3, (t - 0.75) / 0.125);
+    return mix(c3, c4, (t - 0.875) / 0.125);
+  }
+  vec3 bgHeatStops(float t) {
+    vec3 c0 = vec3(204.0, 85.0, 0.0) / 255.0;
+    vec3 c1 = vec3(175.0, 64.0, 0.0) / 255.0;
+    vec3 c2 = vec3(146.0, 42.0, 1.0) / 255.0;
+    vec3 c3 = vec3(117.0, 21.0, 1.0) / 255.0;
+    vec3 c4 = vec3(102.0, 11.0, 1.0) / 255.0;
+    vec3 c5 = vec3(88.0, 0.0, 1.0) / 255.0;
+    if (t < 0.25) return mix(c0, c1, t / 0.25);
+    if (t < 0.5) return mix(c1, c2, (t - 0.25) / 0.25);
+    if (t < 0.75) return mix(c2, c3, (t - 0.5) / 0.25);
+    if (t < 0.875) return mix(c3, c4, (t - 0.75) / 0.125);
+    return mix(c4, c5, (t - 0.875) / 0.125);
+  }
+  // Radial offset (0..1) of a fragment in Figma reference space: map it back into
+  // gradient space with the inverse transform, then normalise by r=10 (the SVG r).
+  float bgOffset(vec2 pRef, vec4 Linv) {
+    vec2 q = pRef - uBgCenter;
+    vec2 g = vec2(Linv.x * q.x + Linv.y * q.y, Linv.z * q.x + Linv.w * q.y);
+    return clamp(length(g) / 10.0, 0.0, 1.0);
+  }
   void main() {
     vec2 p = vec2(gl_FragCoord.x, uResolution.y - gl_FragCoord.y); // y-down
-    float ang = radians(152.689);
-    vec2 dir = vec2(sin(ang), -cos(ang));
-    vec2 center = uResolution * 0.5;
-    float halfLen = (abs(uResolution.x * dir.x) + abs(uResolution.y * dir.y)) * 0.5;
-    float t = dot(p - center, dir) / (2.0 * halfLen) + 0.5;
-    float u = clamp((t - 0.17843) / (0.8303 - 0.17843), 0.0, 1.0);
 
     // Field influence: soft radial falloff around the pointer/touch (aspect
     // corrected so the radius is circular). Zero when uFieldStrength is 0.
@@ -135,7 +194,15 @@ const MARQUEE_FRAGMENT = /* glsl */ `
     dd.x *= uResolution.x / uResolution.y;
     float infl = uFieldStrength * exp(-dot(dd, dd) / (uFieldRadius * uFieldRadius));
 
-    vec3 col = mix(vec3(44.0, 52.0, 62.0) / 255.0, uDarkStop, u);
+    // Figma radial background: evaluate the Default and Heat rotated-ellipse
+    // endpoints at this fragment, then cross-fade by the eased heat progress.
+    // preserveAspectRatio='none' -> map the fragment straight into reference space.
+    vec2 pRef = (p / uResolution) * uBgRefSize;
+    vec3 col = mix(
+      bgDefaultStops(bgOffset(pRef, uBgLinvDef)),
+      bgHeatStops(bgOffset(pRef, uBgLinvHeat)),
+      uBgHeat
+    );
     col *= (1.0 + uAudioBg);                    // audio background micro-pulse
     col += uFieldColor * (infl * uFieldGlow);   // subtle field halo
 
@@ -310,6 +377,10 @@ export default function Monogram({
       // uniform must be in physical px too (× the renderer pixel ratio). This
       // keeps the marquee centred at every devicePixelRatio (Retina / mobile).
       const pr = () => renderer.getPixelRatio();
+      // Pick this viewport's radial geometry (desktop/mobile), same 767px break.
+      const bgGeo0 = vw <= 767 ? BG_GEO.mobile : BG_GEO.desktop;
+      const bgLinvDef0 = bgLinv(bgGeo0.def);
+      const bgLinvHeat0 = bgLinv(bgGeo0.heat);
       const marqueeMaterial = new THREE.ShaderMaterial({
         uniforms: {
           uResolution: { value: new THREE.Vector2(vw * pr(), vh * pr()) },
@@ -317,7 +388,29 @@ export default function Monogram({
           uOffset: { value: 0 },
           uGroupW: { value: 1 },
           uBandH: { value: MARQUEE_BAND_H * pr() },
-          uDarkStop: { value: new THREE.Vector3(0, 0, 0) },
+          uBgRefSize: {
+            value: new THREE.Vector2(bgGeo0.refSize[0], bgGeo0.refSize[1]),
+          },
+          uBgCenter: {
+            value: new THREE.Vector2(bgGeo0.center[0], bgGeo0.center[1]),
+          },
+          uBgLinvDef: {
+            value: new THREE.Vector4(
+              bgLinvDef0[0],
+              bgLinvDef0[1],
+              bgLinvDef0[2],
+              bgLinvDef0[3],
+            ),
+          },
+          uBgLinvHeat: {
+            value: new THREE.Vector4(
+              bgLinvHeat0[0],
+              bgLinvHeat0[1],
+              bgLinvHeat0[2],
+              bgLinvHeat0[3],
+            ),
+          },
+          uBgHeat: { value: 0 },
           uFieldPos: { value: new THREE.Vector2(0.5, 0.5) },
           uFieldStrength: { value: 0 },
           uFieldRadius: { value: FIELD.radius },
@@ -874,15 +967,12 @@ export default function Monogram({
       const COLD = new THREE.Color(HEAT_HEX_COLD);
       const HOT = new THREE.Color(HEAT_HEX_HOT);
       const heatColor = new THREE.Color(HEAT_HEX_COLD);
-      // Background heat — the gradient's dark (second) stop travels #000000 ->
-      // #580001 (rgb 88,0,1), driven by the SAME eased heat as the monogram. The
-      // visible Home background IS the WebGL marquee (it covers the body), so we
-      // heat ONLY its shader uniform — no per-frame CSS write, which used to
-      // repaint the full-screen fixed body gradient (a compositor cost behind
-      // the marquee) and allocate a string every heated frame. The CSS var is
-      // reset to base on cleanup so any non-WebGL route/fallback stays neutral.
-      const HEAT_DARK_R = 88;
-      const HEAT_DARK_B = 1;
+      // Background heat — the visible Home background IS the WebGL marquee plane
+      // (it covers the body), so heat drives ONLY the shader: a single uBgHeat
+      // uniform cross-fades the Default radial (Figma 243:409/565) into the Heat
+      // radial (243:481/536), following the SAME eased heat as the monogram — no
+      // per-frame CSS write / string allocation. rootStyle is kept only to reset
+      // the legacy CSS heat vars on cleanup so any non-WebGL route stays neutral.
       const rootStyle = document.documentElement.style;
       const baseTint = profile.tintStrength;
       const baseBlur = profile.blur; // liquid-glass base; frost adds on top
@@ -905,13 +995,9 @@ export default function Monogram({
         appliedHeat = heat;
         const eased = smoothstep01(heat); // smooth colour + opacity
         heatColor.copy(COLD).lerpHSL(HOT, eased);
-        // Background dark stop tracks the same eased heat (#000 -> #580001) via
-        // the marquee shader uniform only (no allocation, no CSS repaint).
-        marqueeMaterial.uniforms.uDarkStop.value.set(
-          (HEAT_DARK_R * eased) / 255,
-          0,
-          (HEAT_DARK_B * eased) / 255,
-        );
+        // Background: the same eased heat cross-fades the Default radial into the
+        // Heat radial in the marquee shader (no allocation, no CSS repaint).
+        marqueeMaterial.uniforms.uBgHeat.value = eased;
         // Frost ramps in only over BLUR_START..1, smoothly.
         const frost = smoothstep01(
           Math.min(1, Math.max(0, (heat - BLUR_START) / (1 - BLUR_START))),
@@ -1698,6 +1784,19 @@ export default function Monogram({
       const onResize = () => {
         vw = window.innerWidth;
         vh = window.innerHeight;
+        // Responsive background: feed the CURRENT viewport's radial geometry so no
+        // stale desktop geometry survives on mobile (or vice versa). Colours + the
+        // heat cross-fade are untouched; this only swaps the gradient transform.
+        {
+          const geo = vw <= 767 ? BG_GEO.mobile : BG_GEO.desktop;
+          const ld = bgLinv(geo.def);
+          const lh = bgLinv(geo.heat);
+          const mu = marqueeMaterial.uniforms;
+          mu.uBgRefSize.value.set(geo.refSize[0], geo.refSize[1]);
+          mu.uBgCenter.value.set(geo.center[0], geo.center[1]);
+          mu.uBgLinvDef.value.set(ld[0], ld[1], ld[2], ld[3]);
+          mu.uBgLinvHeat.value.set(lh[0], lh[1], lh[2], lh[3]);
+        }
         camera.left = -vw / 2;
         camera.right = vw / 2;
         camera.top = vh / 2;

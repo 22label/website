@@ -11,17 +11,17 @@ import styles from "./DesktopRail.module.css";
  * Desktop-only (>=768px).
  *
  * Owns the PLAY "Focus" feedback: when the knobs are locked (playback off) and the
- * user attempts to operate one, the CTA flashes a green glow for ~1s. One continuous
- * attempt = one pulse (coalesced via `focusBusy`, no per-event restart); a short
- * cooldown after the fade lets a genuinely new attempt trigger it again. All timers
- * are cleared on unmount.
+ * user attempts to operate one, the CTA plays a short kinetic impulse (~500ms). A
+ * single continuous attempt (e.g. a wheel burst) coalesces into one impulse via
+ * `focusBusy`; the flag clears exactly when the impulse ends, so the very next
+ * blocked attempt reliably restarts it — even one that just finished. The timer is
+ * cleared on unmount.
  */
 export default function DesktopRail() {
   const [isDesktop, setIsDesktop] = useState(false);
   const [playFocus, setPlayFocus] = useState(false);
   const focusBusy = useRef(false);
-  const fadeTimer = useRef<number | null>(null);
-  const cooldownTimer = useRef<number | null>(null);
+  const endTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -35,18 +35,19 @@ export default function DesktopRail() {
     if (focusBusy.current) return; // coalesce every event of the same attempt
     focusBusy.current = true;
     setPlayFocus(true);
-    fadeTimer.current = window.setTimeout(() => {
-      setPlayFocus(false); // remove the class → CSS returns to no-shadow, no residual
-      cooldownTimer.current = window.setTimeout(() => {
-        focusBusy.current = false; // a new independent attempt may now retrigger
-      }, 140);
-    }, 1000);
+    // Hold the class for the impulse duration (~500ms), then drop it AND clear the
+    // busy flag together. Removing the class first means the next blocked attempt
+    // re-adds it in a later render → the CSS animation restarts cleanly, so a fresh
+    // attempt reliably re-triggers even right after the previous one completed.
+    endTimer.current = window.setTimeout(() => {
+      setPlayFocus(false);
+      focusBusy.current = false;
+    }, 520);
   }, []);
 
   useEffect(
     () => () => {
-      if (fadeTimer.current) clearTimeout(fadeTimer.current);
-      if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
+      if (endTimer.current) clearTimeout(endTimer.current);
     },
     [],
   );

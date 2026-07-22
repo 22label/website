@@ -178,10 +178,21 @@ function Knob({
   const pct = Math.round(amount * 100);
   return (
     <div className={styles.filter}>
-      <span className={styles.label}>{label}</span>
+      {/* Label row: HP/LP text + a 6px LED indicator (Figma 243:793/806). The LED
+          is the SOLE active-state cue — it illuminates blue while this knob is
+          off-neutral and dims when it returns to neutral. Driven by the SAME
+          `active` (amount > tolerance) as rotation / aria-valuenow, so they can
+          never desynchronise. The knob artwork itself gets no active styling. */}
+      <div className={styles.labelRow}>
+        <span className={styles.label}>{label}</span>
+        <span
+          className={`${styles.indicator} ${active ? styles.indicatorOn : ""}`}
+          aria-hidden="true"
+        />
+      </div>
       <div
         ref={knobRef}
-        className={`${styles.knob} ${active ? styles.active : ""}`}
+        className={styles.knob}
         role="slider"
         tabIndex={0}
         aria-label={`${label} filter`}
