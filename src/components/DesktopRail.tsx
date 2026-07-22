@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import MusicPlayerControl from "./MusicPlayerControl";
+import Mixer from "./Mixer";
 import styles from "./DesktopRail.module.css";
 
 /**
@@ -25,8 +26,11 @@ export default function DesktopRail() {
   if (!isDesktop) return null;
 
   return (
-    <div className={styles.rail}>
-      <MusicPlayerControl variant="desktop" />
-    </div>
+    <>
+      <Mixer />
+      <div className={styles.rail}>
+        <MusicPlayerControl variant="desktop" />
+      </div>
+    </>
   );
 }

@@ -60,11 +60,27 @@ type Graph = {
   ctx: AudioContext;
   gain: GainNode;
   analyser: AnalyserNode;
+  hp: BiquadFilterNode; // MIXER high-pass (desktop) — neutral until swept
+  lp: BiquadFilterNode; // MIXER low-pass  (desktop) — neutral until swept
   freq: Uint8Array<ArrayBuffer>;
   buffer: AudioBuffer | null; // seamless loop buffer (null until decoded)
   source: AudioBufferSourceNode | null; // the ONE playing source (or null)
   loopDuration: number; // seconds
 };
+
+// --- MIXER filter sweep (desktop) -------------------------------------------
+// Two BiquadFilterNodes inserted between the source and the gain, so the shared
+// analyser (and therefore the waveform) sees the FILTERED signal. Amounts are a
+// normalized 0..1 (0 = neutral / inaudible). Log-mapped to musical corner
+// frequencies; smoothly automated with setTargetAtTime (no zipper/clicks).
+const HP_FREQ_MIN = 20; // HP amount 0 → 20Hz (below audible → passes everything)
+const HP_FREQ_MAX = 6000; // HP amount 1 → 6kHz (removes lows)
+const LP_FREQ_MAX = 20000; // LP amount 0 → 20kHz (above audible → passes everything)
+const LP_FREQ_MIN = 300; // LP amount 1 → 300Hz (removes highs)
+const FILTER_TAU = 0.03; // AudioParam smoothing time-constant (s)
+let hpAmount = 0; // persisted so a value set before the graph exists still applies
+let lpAmount = 0;
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // --- LIVE_WEB_AUDIO state (desktop) -----------------------------------------
 let graph: Graph | null = null;
@@ -259,17 +275,35 @@ function ensureLiveGraph(): boolean {
   const analyser = ctx.createAnalyser();
   analyser.fftSize = isMobile() ? PULSE.fftSizeMobile : PULSE.fftSizeDesktop;
   analyser.smoothingTimeConstant = PULSE.smoothing;
+  // MIXER filters, inserted BEFORE the gain/analyser so the waveform reacts to the
+  // filtered signal: source → hp → lp → gain → analyser → destination. Both start
+  // neutral (HP low, LP high) and are restored to the current amounts below.
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = HP_FREQ_MIN;
+  hp.Q.value = 0.707;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = LP_FREQ_MAX;
+  lp.Q.value = 0.707;
+  hp.connect(lp);
+  lp.connect(gain);
   gain.connect(analyser);
   analyser.connect(ctx.destination);
   graph = {
     ctx,
     gain,
     analyser,
+    hp,
+    lp,
     freq: new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount)),
     buffer: null,
     source: null,
     loopDuration: 0,
   };
+  // Re-apply any amounts set before the graph was built (jump, no ramp needed).
+  applyHp(hpAmount, true);
+  applyLp(lpAmount, true);
   if (!visibilityHooked) {
     visibilityHooked = true;
     document.addEventListener("visibilitychange", () => {
@@ -339,7 +373,7 @@ function startSource(offset: number): void {
   src.loop = true;
   src.loopStart = 0;
   src.loopEnd = graph.loopDuration;
-  src.connect(gain);
+  src.connect(graph.hp); // → hp → lp → gain → analyser → destination
   const t = ctx.currentTime;
   gain.gain.cancelScheduledValues(t);
   gain.gain.setValueAtTime(0.0001, t);
@@ -530,6 +564,32 @@ export function setExternalDriver(on: boolean): void {
   externalDriver = on;
   if (on) stopInternal();
   else if (playingTarget || env > 0.001) startInternal();
+}
+
+// --- MIXER filter amount setters (desktop) ----------------------------------
+function applyHp(amount: number, jump = false): void {
+  hpAmount = clamp01(amount);
+  if (!graph) return;
+  const f = HP_FREQ_MIN * Math.pow(HP_FREQ_MAX / HP_FREQ_MIN, hpAmount);
+  const now = graph.ctx.currentTime;
+  if (jump) graph.hp.frequency.setValueAtTime(f, now);
+  else graph.hp.frequency.setTargetAtTime(f, now, FILTER_TAU);
+}
+function applyLp(amount: number, jump = false): void {
+  lpAmount = clamp01(amount);
+  if (!graph) return;
+  const f = LP_FREQ_MAX * Math.pow(LP_FREQ_MIN / LP_FREQ_MAX, lpAmount);
+  const now = graph.ctx.currentTime;
+  if (jump) graph.lp.frequency.setValueAtTime(f, now);
+  else graph.lp.frequency.setTargetAtTime(f, now, FILTER_TAU);
+}
+/** MIXER: set the normalized high-pass amount (0 = neutral/off .. 1 = max). */
+export function setHpAmount(amount: number): void {
+  applyHp(amount);
+}
+/** MIXER: set the normalized low-pass amount (0 = neutral/off .. 1 = max). */
+export function setLpAmount(amount: number): void {
+  applyLp(amount);
 }
 
 /** Smoothed bands already scaled by the fade envelope (0 when silent/paused). */
