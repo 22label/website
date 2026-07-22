@@ -42,10 +42,16 @@ function Knob({
   kind,
   label,
   apply,
+  locked,
+  onLockedAttempt,
 }: {
   kind: Kind;
   label: string;
   apply: (a: number) => void;
+  /** While locked (playback off) input never changes the value; it only cues. */
+  locked: boolean;
+  /** Called on any locked-knob input attempt → the PLAY CTA flashes its Focus. */
+  onLockedAttempt: () => void;
 }) {
   const [amount, setAmount] = useState(0);
   const valueRef = useRef(0); // synchronous current value for event handlers
@@ -95,13 +101,17 @@ function Knob({
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       if (!heldRef.current) return;
-      e.preventDefault();
+      e.preventDefault(); // consume the held wheel gesture (no page scroll)
+      if (locked) {
+        onLockedAttempt(); // locked: cue "press play", never change the value
+        return;
+      }
       // deltaY<0 is a scroll-UP gesture; `dir` maps it to +step (HP) or −step (LP).
       set(valueRef.current + dir * (e.deltaY < 0 ? WHEEL_STEP : -WHEEL_STEP));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [set, dir]);
+  }, [set, dir, locked, onLockedAttempt]);
 
   // Window blur (and unmount cleanup) must always clear the interaction state.
   useEffect(() => {
@@ -124,27 +134,44 @@ function Knob({
       /* capture unsupported — window listeners still track it */
     }
     // No preventDefault → the knob still focuses (keyboard control preserved).
+    if (locked) onLockedAttempt(); // grabbing a locked knob only cues "press play"
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!heldRef.current || e.pointerId !== pointerIdRef.current) return;
     const dy = lastYRef.current - e.clientY; // drag up = +dy (incremental)
     lastYRef.current = e.clientY;
+    if (dy === 0) return;
+    if (locked) {
+      onLockedAttempt(); // no value change while locked
+      return;
+    }
     // `dir` mirrors LP: drag up increases HP but returns LP toward neutral.
-    if (dy !== 0) set(valueRef.current + dir * dy * DRAG_SENS);
+    set(valueRef.current + dir * dy * DRAG_SENS);
   };
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerId === pointerIdRef.current) endHold();
   };
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    let handled = true;
+    const k = e.key;
+    const isAdjust =
+      k === "ArrowUp" ||
+      k === "ArrowDown" ||
+      k === "ArrowLeft" ||
+      k === "ArrowRight" ||
+      k === "Home" ||
+      k === "End";
+    if (!isAdjust) return;
+    e.preventDefault(); // consume the key either way (locked cue or real adjust)
+    if (locked) {
+      onLockedAttempt(); // locked: cue "press play", never change the value
+      return;
+    }
     // Up/Right = engage gesture on HP; `dir` mirrors it for LP (Down engages LP,
     // Up returns it toward neutral). Home = neutral, End = max — absolute for both.
-    if (e.key === "ArrowUp" || e.key === "ArrowRight") set(valueRef.current + dir * KEY_STEP);
-    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") set(valueRef.current - dir * KEY_STEP);
-    else if (e.key === "Home") set(0);
-    else if (e.key === "End") set(1);
-    else handled = false;
-    if (handled) e.preventDefault();
+    if (k === "ArrowUp" || k === "ArrowRight") set(valueRef.current + dir * KEY_STEP);
+    else if (k === "ArrowDown" || k === "ArrowLeft") set(valueRef.current - dir * KEY_STEP);
+    else if (k === "Home") set(0);
+    else if (k === "End") set(1);
   };
 
   const active = amount > ACTIVE_EPS;
@@ -162,6 +189,8 @@ function Knob({
         aria-valuemax={100}
         aria-valuenow={pct}
         aria-valuetext={`${pct}%`}
+        aria-disabled={locked || undefined}
+        aria-describedby={locked ? LOCK_HINT_ID : undefined}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -182,18 +211,43 @@ function Knob({
   );
 }
 
-export default function Mixer() {
+const LOCK_HINT_ID = "mixer-lock-hint";
+
+export default function Mixer({
+  onLockedAttempt,
+}: {
+  /** Bubbles a locked-knob attempt up to the desktop rail (drives PLAY Focus). */
+  onLockedAttempt: () => void;
+}) {
   // Container Active follows the canonical playback state (AudioProvider) — the
   // same flag the PLAY MUSIC pill uses — so the mixer fills black-50% at the exact
   // moment playback starts and clears when it stops. Knob positions never gate it.
+  // The SAME flag locks the knobs: no playback → knobs are locked (input cues only).
   const { playing } = useAudio();
+  const locked = !playing;
   return (
     <div
       className={`${styles.mixer} ${playing ? styles.active : ""}`}
       aria-label="Audio filter mixer"
     >
-      <Knob kind="hp" label="HP" apply={setHpAmount} />
-      <Knob kind="lp" label="LP" apply={setLpAmount} />
+      {/* Non-visible hint for assistive tech while the knobs are locked. */}
+      <span id={LOCK_HINT_ID} className={styles.srOnly}>
+        Start music playback to adjust the HP and LP filters.
+      </span>
+      <Knob
+        kind="hp"
+        label="HP"
+        apply={setHpAmount}
+        locked={locked}
+        onLockedAttempt={onLockedAttempt}
+      />
+      <Knob
+        kind="lp"
+        label="LP"
+        apply={setLpAmount}
+        locked={locked}
+        onLockedAttempt={onLockedAttempt}
+      />
     </div>
   );
 }

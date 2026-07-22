@@ -1,6 +1,11 @@
 /* Bottom-right release previewer — default collapsed, expands on hover.
    Anchored bottom-right; grows up + left. The corner never moves. */
 .release {
+  /* ONE shared collapsed width drives the whole default component: the COMING SOON
+     row, the cover, and this container are all --preview-w (Figma 204:7101 = 130px)
+     so text + cover share identical left/right edges. Hover overrides to auto so the
+     expanded cover/copy can grow (not forced to stay 130px). */
+  --preview-w: 130px;
   position: fixed;
   bottom: var(--corner-gap); /* exactly 64px from the bottom edge */
   right: var(--corner-gap); /* exactly 64px from the right edge */
@@ -8,7 +13,7 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 16px;
-  width: fit-content;
+  width: var(--preview-w);
   text-align: right;
   z-index: var(--z-player); /* above the gradient child; below the menu */
 }
@@ -92,9 +97,12 @@
    height so it leaves no gap; on contract it fades back in once the block is
    sufficiently collapsed. It is never overlaid on the expanded copy. */
 .comingSoon {
-  color: var(--muted);
+  display: block;
+  width: var(--preview-w); /* = cover width; text right-aligns within, shared edges */
+  color: var(--white); /* white in the default state (Figma 204:7101) */
   font-size: 16px; /* Figma 204:7105 — exactly 16px */
   letter-spacing: 1.76px; /* 11% of 16px (Figma) */
+  text-align: right;
   white-space: nowrap;
   overflow: hidden;
   max-height: 24px;
@@ -143,8 +151,8 @@
 /* Cover — 110×110 default, 220×220 on hover. */
 .coverWrap {
   position: relative;
-  width: 110px;
-  height: 110px;
+  width: var(--preview-w); /* default 130 (Figma); 1:1, grows on hover */
+  height: var(--preview-w);
   overflow: hidden;
   transition:
     width 0.6s cubic-bezier(0.22, 1, 0.36, 1),
@@ -161,6 +169,12 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
+  /* Expanded: let the component grow past the collapsed 130px so the larger cover
+     and the revealed copy are not clamped (only the DEFAULT state is 130px). */
+  .release:hover,
+  .release:focus-within {
+    width: auto;
+  }
   .release:hover .releaseDetails,
   .release:focus-within .releaseDetails {
     grid-template-rows: 1fr;

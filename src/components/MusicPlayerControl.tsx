@@ -17,8 +17,12 @@ const TITLE = "MARCOS BAIANO - INTRUDER (ORIGINAL MIX)";
 
 export default function MusicPlayerControl({
   variant,
+  focus = false,
 }: {
   variant: "desktop" | "mobile";
+  /** Desktop only: temporary green "Focus" glow flashed when a locked knob is
+   *  operated (Figma 241:404). Never passed on mobile, so mobile is unaffected. */
+  focus?: boolean;
 }) {
   const { playing, toggle } = useAudio();
 
@@ -30,7 +34,7 @@ export default function MusicPlayerControl({
     >
       <button
         type="button"
-        className={styles.toggle}
+        className={`${styles.toggle} ${focus ? styles.playFocus : ""}`}
         data-state={playing ? "on" : "off"}
         aria-pressed={playing}
         aria-label={playing ? "Pause music" : "Play music"}

@@ -70,6 +70,56 @@
 .desktop .toggle[data-state="on"] .labelSlot {
   width: 104px; /* hugs "PLAY TO MIX"; constant OFF↔ON so nothing shifts on toggle */
 }
+
+/* PLAY "Focus" feedback (desktop). Flashed for ~1s when a LOCKED mixer knob is
+   operated while playback is off (Figma 241:404): a green outer glow on the whole
+   pill. Implemented as a filter drop-shadow so it hugs the rounded pill silhouette
+   and touches nothing else (copy, icon, size, position all unchanged). Quick
+   fade-in, brief hold, smooth fade-out, then EXACTLY back to normal — the class is
+   removed after ~1s so no filter/residual remains. */
+.playFocus {
+  animation: playFocusGlow 1s ease;
+}
+@keyframes playFocusGlow {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(115, 246, 8, 0));
+  }
+  15% {
+    filter: drop-shadow(0 0 8px rgba(115, 246, 8, 0.66));
+  }
+  70% {
+    filter: drop-shadow(0 0 8px rgba(115, 246, 8, 0.66));
+  }
+  100% {
+    filter: drop-shadow(0 0 0 rgba(115, 246, 8, 0));
+  }
+}
+/* Reduced motion: keep the EXACT green appearance but avoid the growing-blur pulse
+   — a brief, simple fade in/out at a constant 8px blur. !important + the higher
+   `.playFocus` specificity override the global reduced-motion animation damping so
+   the feedback is not removed entirely. */
+@media (prefers-reduced-motion: reduce) {
+  .playFocus {
+    animation-name: playFocusGlowReduced !important;
+    animation-duration: 0.6s !important;
+    animation-timing-function: ease !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+@keyframes playFocusGlowReduced {
+  0% {
+    filter: drop-shadow(0 0 8px rgba(115, 246, 8, 0));
+  }
+  30% {
+    filter: drop-shadow(0 0 8px rgba(115, 246, 8, 0.66));
+  }
+  70% {
+    filter: drop-shadow(0 0 8px rgba(115, 246, 8, 0.66));
+  }
+  100% {
+    filter: drop-shadow(0 0 8px rgba(115, 246, 8, 0));
+  }
+}
 .toggle:focus {
   outline: none;
 }

@@ -5,6 +5,7 @@ import Shell from "@/components/Shell";
 import AudioProvider from "@/components/AudioProvider";
 import PortalNav from "@/components/PortalNav";
 import LandscapeBlocker from "@/components/LandscapeBlocker";
+import { Analytics } from "@vercel/analytics/next";
 
 /**
  * Clash Display (Fontshare, ITF Free Font License) — self-hosted under
@@ -74,6 +75,9 @@ export default function RootLayout({
             mobile layout selection, so it can cover the whole site regardless of
             which layout is active. */}
         <LandscapeBlocker />
+        {/* Vercel Web Analytics — mounted once at the root so it tracks every
+            route. No cookies/consent/env vars required. */}
+        <Analytics />
       </body>
     </html>
   );
