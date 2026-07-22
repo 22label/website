@@ -23,6 +23,13 @@ const PHASES = [
 
 const INTERVAL_MS = 3000;
 
+/** The BASE location reads "BCN [ES]" on the mobile bottom section (Figma
+ *  230:404); the desktop copy is unchanged. Only this one value is variant-aware. */
+function phaseValue(i: number, variant: "desktop" | "mobile") {
+  if (variant === "mobile" && PHASES[i].label === "BASE") return "BCN [ES]";
+  return PHASES[i].value;
+}
+
 export default function AnimatedInfo({
   variant,
 }: {
@@ -75,7 +82,9 @@ export default function AnimatedInfo({
             aria-hidden="true"
           >
             <span className={styles.infoLabel}>{PHASES[view.prev].label}</span>
-            <span className={styles.infoValue}>{PHASES[view.prev].value}</span>
+            <span className={styles.infoValue}>
+              {phaseValue(view.prev, variant)}
+            </span>
           </div>
         )}
         <div
@@ -83,7 +92,7 @@ export default function AnimatedInfo({
           className={`${styles.phase} ${styles.phaseEnter}`}
         >
           <span className={styles.infoLabel}>{PHASES[view.cur].label}</span>
-          <span className={styles.infoValue}>{PHASES[view.cur].value}</span>
+          <span className={styles.infoValue}>{phaseValue(view.cur, variant)}</span>
         </div>
       </div>
       <span className={styles.infoLine} aria-hidden="true" />

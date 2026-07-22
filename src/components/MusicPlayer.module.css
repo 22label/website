@@ -3,7 +3,7 @@
    file styles the button itself. Only the button is interactive.
 
    OFF:     white pill, black speaker icon + "PLAY".
-   PLAYING: transparent pill + 1px white outline, white icon + track title.
+   PLAYING: black 50% pill + 1px white outline, white icon + track title.
 
    The play/pause action and the OFF/ON state come from MusicPlayerControl
    (unchanged) — this file only changes the visual treatment + internal spacing. */
@@ -137,12 +137,12 @@
 
 /* ---------- PLAYING ---------- */
 .toggle[data-state="on"] {
-  background: transparent; /* white fill disappears */
-  border-color: #fff; /* 1px white outline */
+  background: rgba(0, 0, 0, 0.5); /* black 50% fill while playback is active */
+  border-color: #fff; /* 1px white outline (unchanged) */
   color: #fff; /* white content */
 }
 .toggle[data-state="on"]:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.4); /* subtle hover lift, still black while active */
 }
 .toggle[data-state="on"] .icon {
   filter: none; /* white icon on the transparent pill */

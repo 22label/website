@@ -72,7 +72,7 @@
   width: 151px;
 }
 .mobile .infoLine {
-  width: 113px;
+  width: 57px; /* matches the shorter "BCN [ES]" label (Figma 230:404) */
 }
 
 /* Current row enters from just below + fades in; leaving row rises + fades out. */
