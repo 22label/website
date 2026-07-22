@@ -61,7 +61,7 @@ const VERT = /* glsl */ `
   uniform float uRowShrink;                  // linear back-row narrowing
   uniform float uAmp, uIdleAmp;              // audio + idle-terrain relief (px)
   uniform float uBackHeightScale, uHeightFalloffStart; // travelling-crest height
-  uniform float uBottomY, uCoverRampPx;      // full-bleed covering-apron guarantee
+  uniform float uFrontExtend;                // plane param start (< 0 = foreground)
   uniform float uPointSize, uPointDepthShrink, uDpr;
   varying float vAmp;
   varying float vV;
@@ -77,29 +77,27 @@ const VERT = /* glsl */ `
   }
 
   void main() {
-    // Screen-even placement: for an ORTHOGRAPHIC camera screen-Y is affine in
-    // world-Y, so an even on-screen row pitch = LINEAR interpolation across the
-    // row index (aV). This is the exact inverse projection — no power curve — so
-    // rows are equally spaced from the horizon to the bottom (no widening bands).
-    float e = aV;
-    float xScale = 1.0 - e * uRowShrink;              // back rows narrow linearly
+    // ONE flat inclined plane. The row index (aV, 0..1) is remapped to a plane
+    // parameter that starts BELOW the front (geoAV < 0), so real rows continue the
+    // SAME flat plane past the bottom edge (off-screen) — coverage by extension,
+    // not by bending. Orthographic camera → screen-Y is affine in world-Y, so a
+    // linear geoAV gives an even on-screen row pitch (no widening bands).
+    float geoAV = mix(uFrontExtend, 1.0, aV);
+    float xScale = 1.0 - geoAV * uRowShrink;           // linear narrowing into depth
     float x = (aU - 0.5) * uWidth * xScale;
-    float z = mix(uDepthFront, uDepthBack, e);         // recede behind glass
-    float amp = texture2D(uField, vec2(aU, aV)).r;     // audio displacement (0..1)
+    float z = mix(uDepthFront, uDepthBack, geoAV);      // recede behind glass
+    float amp = texture2D(uField, vec2(aU, aV)).r;      // audio (row index = age)
     // Travelling crest keeps most of its height near/middle, then compresses back.
-    float hScale = mix(1.0, uBackHeightScale, smoothstep(uHeightFalloffStart, 1.0, aV));
-    float idle = terrain(vec2(aU, aV)) * uIdleAmp;     // deterministic low relief
-    float planeY = mix(uFrontY, uHorizonY, e);         // undisplaced base plane
-    // Full-bleed guarantee: rows whose base plane sits at/below the viewport
-    // bottom form a FLAT, full-width covering apron — audio/idle can never lift
-    // them to expose a corner. Displacement ramps in only ABOVE the bottom edge,
-    // so crests appear to rise out of the bottom. Self-adjusts to the projection.
-    float coverMask = smoothstep(uBottomY, uBottomY + uCoverRampPx, planeY);
-    float y = planeY + (amp * uAmp * hScale + idle) * coverMask;
+    float hScale = mix(1.0, uBackHeightScale, smoothstep(uHeightFalloffStart, 1.0, geoAV));
+    float idle = terrain(vec2(aU, geoAV)) * uIdleAmp;   // deterministic low relief
+    float planeY = mix(uFrontY, uHorizonY, geoAV);      // rigid flat-plane base
+    // finalPosition = rigid flat-plane base + UNCHANGED audio/idle displacement.
+    // No screen-Y-dependent mask: waves keep full strength across the whole plane.
+    float y = planeY + amp * uAmp * hScale + idle;
     vAmp = amp;
-    vV = aV;
+    vV = geoAV;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(x, y, z, 1.0);
-    gl_PointSize = max(1.0, uPointSize * uDpr * (1.0 - e * uPointDepthShrink));
+    gl_PointSize = max(1.0, uPointSize * uDpr * (1.0 - geoAV * uPointDepthShrink));
   }
 `;
 
@@ -131,8 +129,12 @@ type Alloc = {
   fieldData: Uint8Array;
   fieldTex: THREE.DataTexture;
   colBandPos: Float32Array; // per-column log-frequency position (0..1) into bands
+  region: Float32Array; // per-column motion region (0 = bass .. 1 = high)
+  attackRate: Float32Array; // per-column attack rate (1/s), by region
+  releaseRate: Float32Array; // per-column release rate (1/s), by region
   smooth: Float32Array; // spectrum resampled to columns
-  smoothB: Float32Array; // neighbour-blurred columns
+  wide: Float32Array; // wide-blur reference (bass influence / unsharp base)
+  smoothB: Float32Array; // articulated (region-processed) columns
   colState: Float32Array; // live front profile (attack/release)
   SNAP_N: number; // ring length
   snaps: Float32Array; // frozen spectral snapshots (ring buffer)
@@ -163,9 +165,8 @@ export function createSpectralWaveformV2(
     const horizon = m ? cfg.horizonFracMobile : cfg.horizonFracDesktop;
     return {
       width: vw * widthFrac,
-      frontY: -vh / 2 - overhang * vh, // front rows below the viewport bottom
-      horizonY: -vh / 2 + horizon * vh, // horizon near mid-screen
-      bottomY: -vh / 2, // viewport bottom edge (covering-apron reference)
+      frontY: -vh / 2 - overhang * vh, // geoAV=0 sits below the viewport bottom
+      horizonY: -vh / 2 + horizon * vh, // horizon near mid-screen (geoAV=1)
     };
   };
 
@@ -215,8 +216,8 @@ export function createSpectralWaveformV2(
     // fractional position (0..1) into the log-spaced analyser bands. Compact bass
     // (left 20%), rich mids (centre 50%), airy highs (right 30%) — not a naive
     // equal-band split. Frequency is continuous across the segment boundaries, so
-    // there are no seams (columnBlur further melts the slope change). Precomputed
-    // once per breakpoint; the per-frame resample just reads it.
+    // there are no seams (the spatial articulation smooths the slope change).
+    // Precomputed once per breakpoint; the per-frame resample just reads it.
     const colBandPos = new Float32Array(NX);
     const lowW = cfg.lowWidthFrac;
     const midW = cfg.midWidthFrac;
@@ -240,6 +241,31 @@ export function createSpectralWaveformV2(
       colBandPos[c] = p < 0 ? 0 : p > 1 ? 1 : p;
     }
 
+    // Per-column motion region (0 = bass .. 1 = high), aligned to the 20/50/30
+    // boundaries, plus the region-interpolated temporal rates. `ss` is smoothstep;
+    // `r3` is a 3-point interpolation so bass/mid/high each keep a distinct rate.
+    const region = new Float32Array(NX);
+    const attackRate = new Float32Array(NX);
+    const releaseRate = new Float32Array(NX);
+    const ss = (e0: number, e1: number, v: number) => {
+      const t = Math.min(1, Math.max(0, (v - e0) / (e1 - e0)));
+      return t * t * (3 - 2 * t);
+    };
+    const r3 = (a: number, b: number, cc: number, t: number) =>
+      t < 0.5 ? a + (b - a) * (t * 2) : b + (cc - b) * ((t - 0.5) * 2);
+    for (let c = 0; c < NX; c++) {
+      const x = NX > 1 ? c / (NX - 1) : 0;
+      const rg = ss(lowW, lowW + midW, x); // 0 across bass, ~0.5 mid, 1 across high
+      region[c] = rg;
+      attackRate[c] = r3(cfg.attackRateBass, cfg.attackRateMid, cfg.attackRateHigh, rg);
+      releaseRate[c] = r3(
+        cfg.releaseRateBass,
+        cfg.releaseRateMid,
+        cfg.releaseRateHigh,
+        rg,
+      );
+    }
+
     return {
       mobile,
       NX,
@@ -248,7 +274,11 @@ export function createSpectralWaveformV2(
       fieldData,
       fieldTex,
       colBandPos,
+      region,
+      attackRate,
+      releaseRate,
       smooth: new Float32Array(NX),
+      wide: new Float32Array(NX),
       smoothB: new Float32Array(NX),
       colState: new Float32Array(NX),
       SNAP_N,
@@ -267,8 +297,7 @@ export function createSpectralWaveformV2(
     uWidth: { value: lay.width },
     uFrontY: { value: lay.frontY },
     uHorizonY: { value: lay.horizonY },
-    uBottomY: { value: lay.bottomY },
-    uCoverRampPx: { value: cfg.coverRampPx },
+    uFrontExtend: { value: cfg.frontExtend },
     uDepthFront: { value: cfg.depthFront },
     uDepthBack: { value: cfg.depthBack },
     uRowShrink: { value: cfg.rowShrink },
@@ -311,23 +340,29 @@ export function createSpectralWaveformV2(
     }
   };
 
-  // Small box blur across neighbouring columns → connected hills, not needles.
-  const blurColumns = () => {
+  // Region-aware spatial articulation. A wide box blur gives the bass a broad
+  // influence radius; mids/highs blend toward an UNSHARP-masked version of the
+  // raw column signal (smooth + K·(smooth − wide)) so local detail re-emerges as
+  // more, narrower peaks. Bass (region 0) → wide; high (region 1) → sharpened.
+  // All from the real spectrum; clamped to [0,1] so no needle spikes.
+  const articulate = () => {
     const NX = st.NX;
-    const r = cfg.columnBlur;
-    if (r <= 0) {
-      st.smoothB.set(st.smooth);
-      return;
-    }
+    const R = cfg.wideBlurRadius;
+    const K = cfg.unsharpAmount;
     for (let c = 0; c < NX; c++) {
       let acc = 0;
       let w = 0;
-      for (let j = c - r; j <= c + r; j++) {
+      for (let j = c - R; j <= c + R; j++) {
         if (j < 0 || j >= NX) continue;
         acc += st.smooth[j];
         w++;
       }
-      st.smoothB[c] = w > 0 ? acc / w : 0;
+      st.wide[c] = w > 0 ? acc / w : 0;
+    }
+    for (let c = 0; c < NX; c++) {
+      const sharp = st.smooth[c] + K * (st.smooth[c] - st.wide[c]); // unsharp mask
+      const v = st.wide[c] + (sharp - st.wide[c]) * st.region[c]; // bass→wide, high→sharp
+      st.smoothB[c] = v < 0 ? 0 : v > 1 ? 1 : v;
     }
   };
 
@@ -359,16 +394,18 @@ export function createSpectralWaveformV2(
     return s0 + (s1 - s0) * jf;
   };
 
-  // Rebuild the depth field: age is a function of the ROW INDEX (0..1), NOT of the
-  // geometric placement — so changing the row count only inserts genuine, freshly
-  // interpolated history samples across the SAME ~2s window (never duplicated
-  // snapshots, never a shortened/distorted history). sampleByAge gives smooth,
-  // frame-rate-independent backward travel.
+  // Rebuild the depth field. Age is a function of the ROW INDEX via the SAME plane
+  // parameter the shader uses (geoAV = mix(frontExtend, 1, rowV)); rows with
+  // geoAV >= 0 sample the continuous ~2s history (never duplicated/shortened),
+  // while the off-screen foreground rows (geoAV < 0) clamp to age 0 — the live
+  // newest spectrum extending the plane forward, not stale snapshots.
   const buildField = () => {
     const { NX, NZ, fieldData } = st;
+    const fe = cfg.frontExtend;
     for (let r = 0; r < NZ; r++) {
-      const aVAge = NZ > 1 ? r / (NZ - 1) : 0; // normalized row-age (index-based)
-      const ageSec = aVAge * cfg.historySeconds;
+      const rowV = NZ > 1 ? r / (NZ - 1) : 0;
+      const geoAV = fe + rowV * (1 - fe); // plane parameter (may be < 0 = foreground)
+      const ageSec = Math.max(0, geoAV) * cfg.historySeconds;
       const row = r * NX;
       for (let c = 0; c < NX; c++) {
         const v = sampleByAge(ageSec, c);
@@ -403,15 +440,17 @@ export function createSpectralWaveformV2(
     const field = getHeatmap(); // shared spectral field (0..1), low→high
     const env = getEnv();
     resample(field);
-    blurColumns();
-    const aA = 1 - Math.exp(-cfg.attackRate * dtSmooth);
-    const aR = 1 - Math.exp(-cfg.releaseRate * dtSmooth);
+    articulate();
     const NX = st.NX;
     for (let c = 0; c < NX; c++) {
       const boosted = Math.min(1, st.smoothB[c] * cfg.spectralGain);
       const target = Math.pow(boosted, cfg.contrast) * env;
       const cur = st.colState[c];
-      st.colState[c] = cur + (target - cur) * (target >= cur ? aA : aR);
+      // Region-dependent attack/release: highs snap + decay fast, bass stays heavy
+      // → adjacent regions no longer rise/fall together (articulated alternation).
+      const rate = target >= cur ? st.attackRate[c] : st.releaseRate[c];
+      const k = 1 - Math.exp(-rate * dtSmooth);
+      st.colState[c] = cur + (target - cur) * k;
     }
 
     // 2) Capture snapshots at a fixed rate in REAL time. If a suspended frame
@@ -441,7 +480,6 @@ export function createSpectralWaveformV2(
     uniforms.uWidth.value = l.width;
     uniforms.uFrontY.value = l.frontY;
     uniforms.uHorizonY.value = l.horizonY;
-    uniforms.uBottomY.value = l.bottomY;
 
     // Breakpoint crossing: Monogram does not recreate the instance, so rebuild the
     // grid/attributes/texture/history for the new column count in place and swap

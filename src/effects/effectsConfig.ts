@@ -34,9 +34,9 @@ export const AUDIO_WAVEFORM = {
   color: [0.37647, 0.63922, 0.74902] as [number, number, number],
   // Grid — ~doubled total points (one dimension each) for a continuous mesh.
   columnsDesktop: 136, // spectral columns across X (desktop)
-  rowsDesktop: 112, // screen-even depth rows → 136×112 = 15,232 (~5px row pitch @900)
+  rowsDesktop: 168, // screen-even rows over the extended plane → 136×168 = 22,848
   columnsMobile: 84,
-  rowsMobile: 80, // 84×80 = 6,720 (screen-even rows, same geometric range)
+  rowsMobile: 120, // 84×120 = 10,080 (screen-even rows over the extended plane)
   pointSize: 3.4, // base dot size (px, DPR-scaled)
   pointDepthShrink: 0.55, // how much far points shrink (perspective)
   // --- Composition: DESKTOP (full-bleed, lowered + frontal) ---
@@ -47,11 +47,13 @@ export const AUDIO_WAVEFORM = {
   widthFracMobile: 1.85, // ~185vw overscan
   frontOverhangFracMobile: 0.28, // front rows ~28vh below the viewport bottom
   horizonFracMobile: 0.36, // horizon at ~36% of viewport height
-  // Full-bleed apron: rows whose base plane sits at/below the viewport bottom get
-  // ZERO audio/idle displacement (a flat covering apron); displacement ramps in
-  // over this many px above the bottom edge, so bass valleys/peaks can never
-  // expose the bottom-left/right corners. Per-point, in the shader.
-  coverRampPx: 70,
+  // Foreground extension of the flat plane: the row index (0..1) is remapped to a
+  // plane parameter starting at this NEGATIVE value (geoAV = mix(frontExtend, 1,
+  // rowV)), so real rows continue the SAME flat inclined plane below the front
+  // edge (off-screen). This — not any bottom clamp/curvature — keeps the bottom
+  // covered even when strong bass lifts the foreground. The visible region
+  // (geoAV >= 0) is unchanged; off-screen foreground rows show the live spectrum.
+  frontExtend: -0.5,
   // --- Depth / faked perspective (orthographic camera) ---
   depthFront: -240, // z of the front row (behind the monogram, ahead of marquee)
   depthBack: -840, // z of the back row
@@ -63,9 +65,20 @@ export const AUDIO_WAVEFORM = {
   ampPx: 380, // max audio Y displacement (px)
   spectralGain: 1.6, // lift the normalised analyser energy into usable amplitude
   contrast: 1.35, // gamma → peak/trough separation (localised formations)
-  columnBlur: 1, // neighbour-column smoothing radius → connected hills (not needles)
-  attackRate: 22, // per-second front-profile attack (frame-rate independent)
-  releaseRate: 6, // per-second front-profile release — no flicker
+  // Per-region MOTION CHARACTER (articulated, not one fluid sheet). Bass is
+  // weighty/slow; mids medium; highs fast + snappy so short transients register.
+  // Per-second attack/release, interpolated per column by frequency region.
+  attackRateBass: 14,
+  releaseRateBass: 4,
+  attackRateMid: 27,
+  releaseRateMid: 11,
+  attackRateHigh: 46,
+  releaseRateHigh: 21,
+  // Per-region SPATIAL response: bass uses a wide box blur (broad influence);
+  // mids/highs re-sharpen local detail with an unsharp mask (more, narrower peaks)
+  // — derived from the real spectrum, never procedural noise. Clamped, no spikes.
+  wideBlurRadius: 4, // bass influence radius / unsharp reference
+  unsharpAmount: 1.05, // mid/high local-detail accentuation (0 = off)
   // --- Horizontal frequency map (perceptual 20/50/30 allocation) ---
   // Width is split into low/mid/high bands; within each, frequency is log-
   // interpolated across its Hz range, then converted to a position into the
