@@ -1,30 +1,40 @@
-/* Approved Home interaction hint: "SCROLL TO GENERATE HEAT". A subtle, centred,
-   non-interactive caption. Sits above the WebGL canvas but below the corner UI and
-   the landscape blocker; pointer-events off so it never intercepts scroll/drag. */
+/* Approved Home interaction hint — Figma node 246:1521 "[SCROLL TO GENERATE HEAT]".
+   Clash Display Regular 18px, 1.98px tracking, solid white, line-height normal.
+   Natural bounds 304×22. Positioned to overlay the Figma coordinate (x=712, y=846)
+   in the 1728×1117 reference frame: horizontally centred (712 + 304/2 = 864 = 1728/2)
+   and vertical centre at 857/1117 = 76.72% of the viewport height → exact overlay at
+   the reference viewport, proportional elsewhere. Non-interactive; never intercepts
+   scroll/drag; above the WebGL scene, below the landscape blocker and corner UI. */
 .cue {
   position: fixed;
   left: 50%;
-  bottom: 64px;
-  transform: translateX(-50%);
+  top: 76.72%;
+  transform: translate(-50%, -50%);
   z-index: 5;
   margin: 0;
+  padding: 0;
   pointer-events: none;
   font-family: var(--font-clash-display), sans-serif;
-  font-weight: 400;
-  font-size: 10px;
-  letter-spacing: 1.1px; /* 11% of 10px */
-  text-transform: uppercase;
+  font-weight: 400; /* Clash Display Regular */
+  font-size: 18px;
+  letter-spacing: 1.98px; /* 11% of 18px */
+  line-height: normal;
   white-space: nowrap;
-  color: rgba(255, 255, 255, 0.55);
+  color: #fff; /* solid white, 100% opacity */
   user-select: none;
   -webkit-user-select: none;
+  opacity: 1;
+  transition: opacity 280ms ease; /* quick, smooth fade-out on first scroll */
 }
 
-/* Mobile portrait: lift it clear of the bottom player/info bar. */
-@media (max-width: 767px) {
+/* First meaningful Home scroll → fade out quickly and smoothly, then unmount. */
+.cue.fading {
+  opacity: 0;
+}
+
+/* Reduced motion: no fade animation — it simply disappears when dismissed. */
+@media (prefers-reduced-motion: reduce) {
   .cue {
-    bottom: 112px;
-    font-size: 9px;
-    letter-spacing: 0.99px;
+    transition: none;
   }
 }

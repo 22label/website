@@ -439,6 +439,7 @@ export const telemetry = {
   monoScale: 1, // applied final monogram scale multiplier
   sonicIntensity: 2.5,
   heat: 0,
+  heatAudio: 0, // applied Home-scroll audio-Heat amount (0..1; desktop LIVE only)
   dpr: 0,
   fps: 0,
   audioState: "none" as string,

@@ -74,16 +74,19 @@ type Graph = {
 // scroll heat), so scrolling issues no node churn.
 type HeatFx = {
   input: GainNode; // stage tap (analyser → input)
-  dry: GainNode; // constant unity pass-through (the untouched playback)
+  dry: GainNode; // unity at heat=0, dips to HEAT_DRY_MIN toward max (no level jump)
+  sendHp: BiquadFilterNode; // high-passes the delay+reverb sends (protects kick/bass)
   delay: DelayNode;
   delayFb: GainNode; // bounded feedback (< 1, always decays)
   delayWet: GainNode; // 0 → HEAT_DELAY_WET
   convolver: ConvolverNode;
   revWet: GainNode; // 0 → HEAT_REVERB_WET
+  satDrive: GainNode; // pre-gain into the shaper (warmth)
   shaper: WaveShaperNode;
   satMakeup: GainNode;
   satWet: GainNode; // 0 → HEAT_SAT_WET
-  output: GainNode; // sums dry + wet → destination
+  output: GainNode; // sums dry + wet
+  limiter: DynamicsCompressorNode; // safety brickwall on the summed output (no clip)
 };
 
 // --- MIXER filter sweep (desktop) -------------------------------------------
@@ -101,23 +104,32 @@ let lpAmount = 0;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // --- HEAT FX (desktop) ------------------------------------------------------
-// A restrained, scroll-driven warmth/space stage placed AFTER the analyser, so
-// HP/LP, the waveform and the dry sound are untouched (the analyser sees the same
-// pre-Heat signal). Three PARALLEL wet sends (short delay, light reverb, warm
-// saturation) blend beside a constant unity dry path — the dry playback is never
-// altered, and at heat=0 every wet send is silent → bit-transparent. All wet
-// amounts scale 0→max by the authoritative Home scroll heat (telemetry.heat), and
-// only while HOME is mounted (heatEnabled) AND music is playing. Values sit inside
-// the approved guardrails; automation is setTargetAtTime (zipper-free).
-const HEAT_DELAY_S = 0.07; // 70ms slapback (guardrail 50–90ms)
-const HEAT_DELAY_FB = 0.28; // bounded feedback — subtle repeats, always < 1 (decays)
-const HEAT_DELAY_WET = 0.05; // max delay wet send (guardrail ~4–6%)
-const HEAT_REVERB_S = 0.4; // short synthetic impulse (light room)
-const HEAT_REVERB_DECAY = 3.0; // impulse decay exponent
-const HEAT_REVERB_WET = 0.08; // max reverb wet send (guardrail ~6–10%)
-const HEAT_SAT_K = 2.0; // tanh(k·x)/k → unity small-signal slope, gentle peak soft-clip
-const HEAT_SAT_MAKEUP = 1.3; // light comp so the peak-compressed copy reads ~unity
-const HEAT_SAT_WET = 0.06; // max saturation wet send (guardrail ~5–8%)
+// A scroll-driven warmth/space stage placed AFTER the analyser, so HP/LP, the
+// waveform and the dry sound are untouched (the analyser sees the same pre-Heat
+// signal). Three PARALLEL wet sends (short slapback delay, light reverb, warm
+// driven saturation) blend beside the dry path — at heat=0 every wet send is silent
+// AND the dry is exactly unity → bit-transparent. All wet amounts scale 0→max by the
+// authoritative Home scroll heat (telemetry.heat), only while HOME is mounted
+// (heatEnabled) AND music is playing. Automation is setTargetAtTime (zipper-free).
+//
+// v2 (audibility fix): the original 5/8/6% sends were fully masked by the 100% dry
+// signal — inaudible. Levels are raised well above those conservative guardrails so
+// the effect is clearly perceptible from medium→max scroll, while staying musical:
+// the delay/reverb sends are HIGH-PASSED so they never wash out kick/bass, the
+// saturation is DRIVEN (with make-up) for real warmth, the dry DIPS slightly toward
+// max Heat so the wet reads without a level jump, and a safety limiter guards peaks.
+const HEAT_DELAY_S = 0.08; // 80ms slapback (guardrail 50–90ms) — short, not an echo
+const HEAT_DELAY_FB = 0.33; // bounded feedback — a couple of soft repeats, always < 1
+const HEAT_DELAY_WET = 0.32; // max delay wet send (clearly audible slapback)
+const HEAT_REVERB_S = 0.5; // short synthetic impulse (light, controlled room)
+const HEAT_REVERB_DECAY = 2.6; // impulse decay exponent
+const HEAT_REVERB_WET = 0.32; // max reverb wet send (audible space, still light)
+const HEAT_SEND_HP_HZ = 180; // HP the delay+reverb sends → protect kick/bass definition
+const HEAT_SAT_DRIVE = 2.0; // pre-gain into the shaper → audible warmth (not just peaks)
+const HEAT_SAT_K = 1.6; // tanh(k·x)/k → unity small-signal slope, gentle soft-clip
+const HEAT_SAT_MAKEUP = 0.8; // level comp for the drive+curve (keeps the copy ~unity)
+const HEAT_SAT_WET = 0.3; // max saturation wet send (unmistakable warmth, not harsh)
+const HEAT_DRY_MIN = 0.85; // dry gain at heat=1 (unity at heat=0 → no volume jump)
 const HEAT_TAU = 0.1; // wet-gain automation smoothing (s) — no clicks/zipper
 let heatEnabled = false; // Home gate (set by the Home cue on mount/unmount)
 let heatSuppressed = false; // future Scratch hook — inert until explicitly activated
@@ -249,6 +261,13 @@ function buildHeatFx(ctx: AudioContext, tap: AudioNode): HeatFx {
   const dry = ctx.createGain();
   dry.gain.value = 1;
 
+  // Shared high-pass feeding the delay + reverb sends so time-smeared low end never
+  // muddies the kick/bass (the dry + saturation keep the full-band body).
+  const sendHp = ctx.createBiquadFilter();
+  sendHp.type = "highpass";
+  sendHp.frequency.value = HEAT_SEND_HP_HZ;
+  sendHp.Q.value = 0.707;
+
   const delay = ctx.createDelay(0.5);
   delay.delayTime.value = HEAT_DELAY_S;
   const delayFb = ctx.createGain();
@@ -262,6 +281,8 @@ function buildHeatFx(ctx: AudioContext, tap: AudioNode): HeatFx {
   const revWet = ctx.createGain();
   revWet.gain.value = 0;
 
+  const satDrive = ctx.createGain();
+  satDrive.gain.value = HEAT_SAT_DRIVE;
   const shaper = ctx.createWaveShaper();
   shaper.curve = makeSatCurve(HEAT_SAT_K);
   shaper.oversample = "2x";
@@ -270,39 +291,55 @@ function buildHeatFx(ctx: AudioContext, tap: AudioNode): HeatFx {
   const satWet = ctx.createGain();
   satWet.gain.value = 0;
 
-  // Dry (unity, bit-transparent) — the untouched playback.
+  // Safety limiter — brickwall-ish on the summed output. Threshold near 0dBFS with a
+  // fast attack, so it is INACTIVE (no gain reduction) at heat=0 where the dry never
+  // approaches the ceiling → the dry sound is unchanged; it only catches wet peaks.
+  const limiter = ctx.createDynamicsCompressor();
+  limiter.threshold.value = -1;
+  limiter.knee.value = 0;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.12;
+
+  // Dry — unity at rest (bit-transparent); dips slightly toward max Heat.
   tap.connect(input);
   input.connect(dry);
   dry.connect(output);
-  // Delay send with bounded internal feedback (subtle slapback).
-  input.connect(delay);
+  // Delay send: high-passed, bounded feedback (subtle slapback), no low-end mud.
+  input.connect(sendHp);
+  sendHp.connect(delay);
   delay.connect(delayFb);
   delayFb.connect(delay);
   delay.connect(delayWet);
   delayWet.connect(output);
-  // Reverb send (short light room).
-  input.connect(convolver);
+  // Reverb send: shares the high-pass (light, controlled room).
+  sendHp.connect(convolver);
   convolver.connect(revWet);
   revWet.connect(output);
-  // Parallel warm saturation send.
-  input.connect(shaper);
+  // Parallel warm saturation send: driven → shaped → made-up → blended (full-band).
+  input.connect(satDrive);
+  satDrive.connect(shaper);
   shaper.connect(satMakeup);
   satMakeup.connect(satWet);
   satWet.connect(output);
 
-  output.connect(ctx.destination);
+  output.connect(limiter);
+  limiter.connect(ctx.destination);
   return {
     input,
     dry,
+    sendHp,
     delay,
     delayFb,
     delayWet,
     convolver,
     revWet,
+    satDrive,
     shaper,
     satMakeup,
     satWet,
     output,
+    limiter,
   };
 }
 
@@ -320,6 +357,10 @@ function updateHeat(running: boolean): void {
   fx.delayWet.gain.setTargetAtTime(HEAT_DELAY_WET * h, t, HEAT_TAU);
   fx.revWet.gain.setTargetAtTime(HEAT_REVERB_WET * h, t, HEAT_TAU);
   fx.satWet.gain.setTargetAtTime(HEAT_SAT_WET * h, t, HEAT_TAU);
+  // Dry dips from unity (h=0 → exactly 1.0, dry unchanged) to HEAT_DRY_MIN at max so
+  // the parallel wet reads clearly without an overall level jump.
+  fx.dry.gain.setTargetAtTime(1 - (1 - HEAT_DRY_MIN) * h, t, HEAT_TAU);
+  telemetry.heatAudio = h; // applied Heat amount (debug: verify 0→1 + wet targets)
 }
 
 // ============================================================================
