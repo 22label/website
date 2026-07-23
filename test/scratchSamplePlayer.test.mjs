@@ -110,3 +110,120 @@ test("loop-seam read is continuous (baked crossfade honoured)", () => {
   const localSlope = Math.abs(Math.sin((2 * Math.PI * 1) / len)) + 1e-3;
   assert.ok(maxJump < localSlope * 3, `seam jump ${maxJump} vs slope ${localSlope}`);
 });
+
+// ---------------------------------------------------------------- STAGE B (rate)
+test("B1 forward fractional rate advances at that rate", () => {
+  const { p } = makePlayer(1000);
+  p.setPlaying(true);
+  p.setRate(0.5);
+  p.process(outBuf(2, 100), 100);
+  assert.ok(Math.abs(p.getPosition() - 50) < 1e-6, `pos ${p.getPosition()}`);
+});
+
+test("B2 faster forward rate advances proportionally", () => {
+  const { p } = makePlayer(10000);
+  p.setPlaying(true);
+  p.setRate(3);
+  p.process(outBuf(2, 100), 100);
+  assert.ok(Math.abs(p.getPosition() - 300) < 1e-6, `pos ${p.getPosition()}`);
+});
+
+test("B3 negative rate moves the read head backward", () => {
+  const { p } = makePlayer(1000);
+  p.setPlaying(true);
+  p.seek(500);
+  p.setRate(-1);
+  p.process(outBuf(2, 100), 100);
+  assert.ok(Math.abs(p.getPosition() - 400) < 1e-6, `pos ${p.getPosition()}`);
+});
+
+test("B4 reverse wraps modulo the loop length", () => {
+  const { p } = makePlayer(100);
+  p.setPlaying(true);
+  p.seek(10);
+  p.setRate(-1);
+  p.process(outBuf(2, 20), 20); // 10 → -10 → wraps to 90
+  assert.ok(Math.abs(p.getPosition() - 90) < 1e-6, `pos ${p.getPosition()}`);
+});
+
+test("B5 zero rate freezes position and outputs safe silence", () => {
+  const { p } = makePlayer(500);
+  p.setPlaying(true);
+  p.setRate(1);
+  p.process(outBuf(2, 50), 50);
+  const held = p.getPosition();
+  p.setRate(0);
+  const o = outBuf(2, 200);
+  p.process(o, 200);
+  assert.equal(p.getPosition(), held, "position frozen at rate 0");
+  assert.ok(peak(o) < 1e-6, "silent at rate 0 (rampMs 0 → instant motion gate)");
+});
+
+test("B6 direction reversal keeps the output continuous", () => {
+  const len = 1000;
+  const { p } = makePlayer(len, 1, (_c, i) => i / len); // smooth linear ramp
+  p.setPlaying(true);
+  p.seek(100);
+  p.setRate(1);
+  const o1 = outBuf(1, 10);
+  p.process(o1, 10); // reads 100..109, head → 110
+  p.setRate(-1);
+  const o2 = outBuf(1, 10);
+  p.process(o2, 10); // reads 110..101 backward
+  const jump = Math.abs(o2[0][0] - o1[0][9]); // across the reversal
+  assert.ok(jump < 2 / len + 1e-6, `reversal jump ${jump}`);
+});
+
+test("B7 stereo output correct at signed fractional rate", () => {
+  const len = 200;
+  const { p, chans } = makePlayer(len, 2, (c, i) => (c + 1) * (i / len));
+  p.setPlaying(true);
+  p.seek(50);
+  p.setRate(-0.5);
+  const o = outBuf(2, 4);
+  p.process(o, 4);
+  const positions = [50, 49.5, 49, 48.5]; // output happens before each advance
+  for (let f = 0; f < 4; f++) {
+    for (let c = 0; c < 2; c++) {
+      const pos = positions[f];
+      const i0 = Math.floor(pos);
+      const i1 = (i0 + 1) % len;
+      const frac = pos - i0;
+      const expect = chans[c][i0] * (1 - frac) + chans[c][i1] * frac;
+      assert.ok(Math.abs(o[c][f] - expect) < 1e-5, `ch${c} f${f}: ${o[c][f]} vs ${expect}`);
+    }
+  }
+});
+
+test("B8 invalid rates are sanitised (no NaN/Infinity, clamped)", () => {
+  const { p } = makePlayer(1000);
+  p.setPlaying(true);
+  for (const bad of [NaN, Infinity, -Infinity, "x", undefined, null, {}]) {
+    p.seek(100);
+    p.setRate(bad);
+    const o = outBuf(2, 32);
+    p.process(o, 32);
+    assert.ok(Number.isFinite(p.getPosition()), `pos finite after rate ${String(bad)}`);
+    for (const c of o)
+      for (const v of c)
+        assert.ok(Number.isFinite(v), `sample finite after rate ${String(bad)}`);
+  }
+  p.setRate(1e9);
+  assert.ok(Math.abs(p.rate) <= 32, `clamped rate ${p.rate}`);
+  p.setRate(-1e9);
+  assert.ok(Math.abs(p.rate) <= 32, `clamped rate ${p.rate}`);
+});
+
+test("B9 rate 1 parity: output equals the buffer (Stage A unchanged)", () => {
+  const len = 128;
+  const { p, chans } = makePlayer(len, 2);
+  p.setPlaying(true);
+  p.setRate(1);
+  p.seek(0);
+  const o = outBuf(2, 32);
+  p.process(o, 32);
+  for (let f = 0; f < 32; f++) {
+    assert.ok(Math.abs(o[0][f] - chans[0][f]) < 1e-4);
+    assert.ok(Math.abs(o[1][f] - chans[1][f]) < 1e-4);
+  }
+});

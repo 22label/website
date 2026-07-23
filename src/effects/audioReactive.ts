@@ -666,6 +666,22 @@ async function setupWorklet(): Promise<void> {
   graph.workletNode = node;
   workletReady = true;
   telemetry.transport = "worklet";
+  // Stage B preview/test hook: drive the signed scratch rate from the console with
+  // no UI (Stage C will replace the caller with the marquee). Worklet transport only.
+  if (typeof window !== "undefined") {
+    (window as unknown as { __h2hScratchRate?: (r: number) => void }).__h2hScratchRate =
+      setScratchRate;
+  }
+}
+
+/** Stage B: set the SIGNED scratch playback rate on the worklet transport. The rate
+ *  is applied INSIDE the worklet DSP (sanitised there): 1 = normal, <0 = reverse,
+ *  0 = stationary (safe/silent), fractional = speed/pitch. No-op unless the worklet
+ *  transport is active — the legacy buffer transport and mobile are never affected. */
+export function setScratchRate(rate: number): void {
+  if (transport() !== "worklet") return;
+  if (!graph || !graph.workletNode) return;
+  graph.workletNode.port.postMessage({ type: "rate", rate });
 }
 
 /** Start the worklet transport. No seek — the read head already holds the correct
