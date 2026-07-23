@@ -28,6 +28,11 @@ import {
   tick as audioTick,
 } from "@/effects/audioReactive";
 import {
+  advanceMarqueePhase,
+  marqueeScratchActive,
+  marqueeScratchRate,
+} from "@/effects/scratchBridge.mjs";
+import {
   currentVisual as portalVisual,
   getPortalState,
   PORTAL,
@@ -1218,8 +1223,17 @@ export default function Monogram({
         lastFrame = now;
         const dtSec = dt / 1000;
 
-        // marquee scroll phase (right -> left), resolution-independent + seamless
-        marqueeOffsetFrac = (marqueeOffsetFrac + dt / MARQUEE_CYCLE_MS) % 1;
+        // marquee scroll phase (right -> left), resolution-independent + seamless. A
+        // desktop scratch (?transport=worklet) temporarily drives it at the SAME signed
+        // rate as the audio; when inactive the rate is 1, so the idle scroll is
+        // unchanged. Never resets → position stays continuous across engage/release.
+        const marqueeRate = marqueeScratchActive() ? marqueeScratchRate() : 1;
+        marqueeOffsetFrac = advanceMarqueePhase(
+          marqueeOffsetFrac,
+          marqueeRate,
+          dt,
+          MARQUEE_CYCLE_MS,
+        );
 
         // --- Rotation inertia (frame-rate independent) -----------------------
         // Priority 1: scroll/inertia is authoritative and accumulates here; the

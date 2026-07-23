@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { setScratchRate } from "@/effects/audioReactive";
 import { createScratchDrag } from "@/effects/marqueeScratchDrag.mjs";
+import { setMarqueeScratch } from "@/effects/scratchBridge.mjs";
 import styles from "./MarqueeScratch.module.css";
 
 /**
@@ -49,7 +50,14 @@ export default function MarqueeScratch() {
     const el = zoneRef.current;
     if (!el) return;
 
-    const drag = createScratchDrag({ onRate: setScratchRate });
+    // The SAME signed rate drives the audio (Stage B/C, unchanged) AND the visual
+    // marquee via the bridge — one gesture state machine, no second one.
+    const drag = createScratchDrag({
+      onRate: (r) => {
+        setScratchRate(r);
+        setMarqueeScratch(true, r);
+      },
+    });
     let pointerId = -1;
     let raf = 0;
 
@@ -58,7 +66,8 @@ export default function MarqueeScratch() {
       raf = drag.isActive() ? requestAnimationFrame(loop) : 0;
     };
     const end = () => {
-      drag.end(); // restores rate 1 if a scratch was engaged
+      drag.end(); // audio: restores rate 1 if a scratch was engaged
+      setMarqueeScratch(false, 1); // visual: hand the marquee back to its idle scroll
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
