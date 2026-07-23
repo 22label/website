@@ -6,6 +6,7 @@ import MobileBottom from "@/components/MobileBottom";
 import EffectsDebugPanel from "@/components/EffectsDebugPanel";
 import PersistentScene from "@/components/PersistentScene";
 import HomeHeatCue from "@/components/HomeHeatCue";
+import MarqueeScratch from "@/components/MarqueeScratch";
 import LogoLink from "@/components/LogoLink";
 import KineticLogo from "@/components/KineticLogo";
 import styles from "./Shell.module.css";
@@ -28,6 +29,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       {/* Home-only: gates the scroll-driven audio Heat + the approved instruction
           label (heat engages only while music plays, using telemetry.heat). */}
       <HomeHeatCue />
+
+      {/* Stage C (desktop + Home + ?transport=worklet): marquee horizontal-drag →
+          signed AudioWorklet scratch rate + the [DRAG TO SCRATCH] label. Inert
+          otherwise; never touches the WebGL marquee or the default transport. */}
+      <MarqueeScratch />
 
       {children}
 

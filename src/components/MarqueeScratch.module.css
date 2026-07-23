@@ -1,0 +1,42 @@
+/* Stage C desktop marquee-scratch drag zone (behind ?transport=worklet, Home only).
+   A central horizontal band over the marquee that captures the horizontal drag —
+   clear of the corner UI (logo/nav/rails/previewer), above the WebGL canvas (z 0),
+   below the corner interface. It never preventDefaults, and a plain click never
+   engages a scratch, so navigation is unaffected. */
+.zone {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: clamp(160px, 30vh, 420px);
+  z-index: 4;
+  pointer-events: auto; /* captures the horizontal scratch drag */
+  cursor: ew-resize; /* horizontal-drag affordance (like a record surface) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  touch-action: none; /* desktop-only zone; avoids any stray gesture interference */
+}
+
+/* Approved desktop interaction copy — matches the [SCROLL TO GENERATE HEAT] system
+   (Clash Display Regular, uppercase, square brackets, white). Non-interactive: the
+   zone captures the drag, the label just labels it. */
+.label {
+  margin: 0;
+  pointer-events: none;
+  font-family: var(--font-clash-display), sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: 1.98px; /* 11% of 18px */
+  line-height: normal;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  opacity: 0.7;
+  user-select: none;
+  -webkit-user-select: none;
+}
