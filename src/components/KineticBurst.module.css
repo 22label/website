@@ -1,0 +1,28 @@
+/**
+ * Layout-neutral host for a programmatically-triggered kinetic burst on inline
+ * pill content (icon + label). The actual animation comes from
+ * KineticTitle.module.css (.base / .slice + ktBase / ktSlice keyframes) — this
+ * only makes the host + base shrink-wrap the flex row so the burst overlays the
+ * exact resting box (no layout shift) and the row's own centring is preserved.
+ */
+.host {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The base wraps the flex `.row`; keep it flex at rest so the row lays out
+   identically to the un-wrapped pill. (During the burst the shared engine sets
+   the base to inline-block for the ktBase settle — the row inside stays flex, so
+   the icon + label still lay out and centre exactly.) */
+.base {
+  display: inline-flex;
+}
+
+/* Surface variant: the base fills the absolutely-positioned host so the cloned
+   full-box skin (e.g. the pill silhouette) covers the exact resting geometry. The
+   host itself is positioned/hidden inline in the component (see KineticBurst.tsx).
+   No layout impact — the host is absolute, out of the parent's flow. */
+.baseFill {
+  position: absolute;
+  inset: 0;
+}

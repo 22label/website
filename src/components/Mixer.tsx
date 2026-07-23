@@ -31,6 +31,46 @@ const DRAG_SENS = 1 / 170; // px of vertical travel → amount (full sweep ≈17
 const WHEEL_STEP = 0.04; // per wheel notch/trackpad tick
 const KEY_STEP = 0.05;
 
+// ----------------------------------------------------- Safari drag selection lock
+// A knob drag uses pointer capture and deliberately does NOT preventDefault on
+// pointerdown (so the knob still focuses for keyboard control). On Safari that lets
+// the browser begin a native text selection elsewhere on the page while the pointer
+// moves. While ANY knob drag is active we suppress selection document-wide, then
+// restore the previous inline state on release. Ref-counted so two simultaneous
+// drags (HP + LP via multitouch) can't unlock the document early, and idempotent
+// per knob (pointerdown ignores extra pointers), so lock/unlock stay balanced.
+let dragSelectionLocks = 0;
+let prevUserSelect = "";
+let prevWebkitUserSelect = "";
+const blockSelectStart = (e: Event) => e.preventDefault();
+
+function lockDocumentSelection(): void {
+  if (typeof document === "undefined") return;
+  if (dragSelectionLocks === 0) {
+    const s = document.documentElement.style;
+    prevUserSelect = s.getPropertyValue("user-select");
+    prevWebkitUserSelect = s.getPropertyValue("-webkit-user-select");
+    s.setProperty("user-select", "none");
+    s.setProperty("-webkit-user-select", "none");
+    // Belt-and-suspenders for Safari: veto any selection outright for the drag.
+    document.addEventListener("selectstart", blockSelectStart);
+  }
+  dragSelectionLocks++;
+}
+
+function unlockDocumentSelection(): void {
+  if (typeof document === "undefined" || dragSelectionLocks === 0) return;
+  dragSelectionLocks--;
+  if (dragSelectionLocks === 0) {
+    const s = document.documentElement.style;
+    if (prevUserSelect) s.setProperty("user-select", prevUserSelect);
+    else s.removeProperty("user-select");
+    if (prevWebkitUserSelect) s.setProperty("-webkit-user-select", prevWebkitUserSelect);
+    else s.removeProperty("-webkit-user-select");
+    document.removeEventListener("selectstart", blockSelectStart);
+  }
+}
+
 type Kind = "hp" | "lp";
 
 /** Amount → CSS rotation. HP: 0→−120°, 1→+120°. LP: 0→+120°, 1→−120°. */
@@ -77,7 +117,8 @@ function Knob({
     [apply],
   );
 
-  // End the hold: idempotent, always releases pointer capture + clears state.
+  // End the hold: idempotent, always releases pointer capture + clears state and
+  // the document selection lock. Runs on pointerup/cancel/lostcapture/blur/unmount.
   const endHold = useCallback(() => {
     if (!heldRef.current) return;
     heldRef.current = false;
@@ -91,6 +132,7 @@ function Knob({
         /* already released */
       }
     }
+    unlockDocumentSelection(); // balances the lock taken in onPointerDown
   }, []);
 
   // Wheel: only while HELD → adjust + preventDefault (block page scroll). When not
@@ -128,6 +170,10 @@ function Knob({
     heldRef.current = true;
     pointerIdRef.current = e.pointerId;
     lastYRef.current = e.clientY;
+    // Suppress page text selection for the whole drag (Safari) — released in
+    // endHold on every termination path. Done here (not via preventDefault) so the
+    // knob still focuses and keyboard control is preserved.
+    lockDocumentSelection();
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -208,6 +254,7 @@ function Knob({
         onPointerCancel={onPointerUp}
         onLostPointerCapture={endHold}
         onKeyDown={onKeyDown}
+        onDragStart={(e) => e.preventDefault()} // no native drag-ghost from the knob
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

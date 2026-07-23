@@ -18,9 +18,11 @@
  * new samples begin on the surface and stop on leave; the per-frame stencil clip
  * then keeps even fading samples inside the current silhouette as it rotates.
  *
- * GPU-oriented: one THREE.Points ring buffer (no per-frame array creation, no DOM
- * nodes), reused typed arrays/attributes, DPR-clamped, procedural radial glow
- * (soft halo, no hard edge). THREE is passed in (never statically imported).
+ * GPU-oriented: one instanced ring buffer of billboard quads (no per-frame array
+ * creation, no DOM nodes), reused typed arrays/attributes, procedural radial glow
+ * (soft halo, no hard edge). Quads (not GL points) so the halo is never clamped by
+ * the driver's point-size ceiling — identical CSS footprint across browsers/DPR.
+ * THREE is passed in (never statically imported).
  * Lifecycle: sample / update / render / resize / dispose.
  */
 import type * as THREE from "three";
@@ -37,14 +39,27 @@ export type MonogramCursorTrail = {
   dispose: () => void;
 };
 
+// Each sample is a screen-aligned BILLBOARD QUAD (instanced), NOT a GL point.
+// gl_PointSize is capped by the driver's ALIASED_POINT_SIZE_RANGE — that ceiling
+// is far smaller on Firefox/macOS than on Chrome (ANGLE) / Safari (Metal), so a
+// 110px halo × DPR clamped to it, making the trail look smaller in Firefox only. A
+// quad has no such cap and is inherently DPR-correct: the orthographic camera maps
+// world units 1:1 to CSS px (positions are `clientX - vw/2`), so a quad sized in
+// world units renders the same CSS footprint at every DPR and in every browser.
 const TRAIL_VERT = /* glsl */ `
+  attribute vec3 aOffset;                // instance centre (world px, z = 0)
   attribute float aLife;                 // 1 = fresh, 0 = dead
-  uniform float uHalo, uDpr;
+  uniform float uHalo;                    // sprite footprint (CSS px == world units)
+  varying vec2 vUv;                       // -1..1 across the sprite (replaces gl_PointCoord)
   varying float vLife;
   void main() {
     vLife = aLife;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aLife > 0.0 ? uHalo * uDpr : 0.0; // dead samples collapse to nothing
+    vUv = position.xy * 2.0;              // base corner -0.5..0.5 -> -1..1
+    float sz = aLife > 0.0 ? uHalo : 0.0; // dead samples collapse to nothing
+    // Axis-aligned ortho camera (no roll) → offsetting in world XY is already
+    // screen-aligned; no per-vertex billboard basis needed.
+    vec3 world = aOffset + vec3(position.xy * sz, 0.0);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(world, 1.0);
   }
 `;
 
@@ -52,9 +67,10 @@ const TRAIL_FRAG = /* glsl */ `
   precision mediump float;
   uniform vec3 uColor;       // #73F608
   uniform float uCoreFrac, uPeak;
+  varying vec2 vUv;
   varying float vLife;
   void main() {
-    float d = length(gl_PointCoord - 0.5) * 2.0; // 0 centre .. 1 sprite edge
+    float d = length(vUv);                         // 0 centre .. 1 sprite edge
     if (d > 1.0) discard;                          // round, no hard square edge
     float halo = exp(-d * d * 3.2);                // soft diffused gaussian falloff
     float core = smoothstep(uCoreFrac, 0.0, d);    // brighter ~22px core
@@ -79,7 +95,6 @@ export function createMonogramCursorTrail(
 
   let vw = opts.vw;
   let vh = opts.vh;
-  const dprClamped = () => Math.min(opts.dpr, TRAIL.dprMax);
 
   // --- Silhouette mask: the REAL monogram geometry stamped into the stencil -----
   // Shares the monogram's BufferGeometry (no duplicated geometry data). DoubleSide
@@ -103,21 +118,31 @@ export function createMonogramCursorTrail(
   const silScene = new three.Scene();
   silScene.add(silMesh);
 
-  // --- Trail points ring buffer -------------------------------------------------
-  const positions = new Float32Array(MAX * 3);
+  // --- Trail ring buffer (instanced billboard quads) ----------------------------
+  // One instanced quad per ring slot. Per-instance centre (aOffset) + life (aLife)
+  // are the reused dynamic arrays; the base geometry is a single unit quad. Drawn
+  // instanced so there is still no per-frame array/DOM churn.
+  const positions = new Float32Array(MAX * 3); // instance centres (world px)
   const life = new Float32Array(MAX); // remaining life 0..1 (0 = dead)
-  const geometry = new three.BufferGeometry();
-  const posAttr = new three.BufferAttribute(positions, 3);
-  const lifeAttr = new three.BufferAttribute(life, 1);
-  posAttr.setUsage(three.DynamicDrawUsage);
+  const geometry = new three.InstancedBufferGeometry();
+  geometry.instanceCount = MAX;
+  // Base unit quad (two triangles), corners -0.5..0.5 → the shader scales it by the
+  // halo footprint and offsets it to each instance centre.
+  const quad = new Float32Array([
+    -0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0,
+  ]);
+  geometry.setAttribute("position", new three.BufferAttribute(quad, 3));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  const offAttr = new three.InstancedBufferAttribute(positions, 3);
+  const lifeAttr = new three.InstancedBufferAttribute(life, 1);
+  offAttr.setUsage(three.DynamicDrawUsage);
   lifeAttr.setUsage(three.DynamicDrawUsage);
-  geometry.setAttribute("position", posAttr);
+  geometry.setAttribute("aOffset", offAttr);
   geometry.setAttribute("aLife", lifeAttr);
 
   const trailMat = new three.ShaderMaterial({
     uniforms: {
       uHalo: { value: TRAIL.haloSizePx },
-      uDpr: { value: dprClamped() },
       uColor: {
         value: new three.Color(TRAIL.color[0], TRAIL.color[1], TRAIL.color[2]),
       },
@@ -138,10 +163,10 @@ export function createMonogramCursorTrail(
     stencilZFail: three.KeepStencilOp,
     stencilZPass: three.KeepStencilOp,
   });
-  const points = new three.Points(geometry, trailMat);
-  points.frustumCulled = false;
+  const trailMesh = new three.Mesh(geometry, trailMat);
+  trailMesh.frustumCulled = false;
   const trailScene = new three.Scene();
-  trailScene.add(points);
+  trailScene.add(trailMesh);
 
   let head = 0; // next ring slot to write
   let lastX = 0;
@@ -166,7 +191,7 @@ export function createMonogramCursorTrail(
     positions[i + 2] = 0;
     life[head] = 1;
     head = (head + 1) % MAX;
-    posAttr.needsUpdate = true;
+    offAttr.needsUpdate = true;
     lifeAttr.needsUpdate = true;
   };
 
@@ -200,8 +225,7 @@ export function createMonogramCursorTrail(
   const resize = (nextVw: number, nextVh: number, dpr: number) => {
     vw = nextVw;
     vh = nextVh;
-    opts.dpr = dpr;
-    trailMat.uniforms.uDpr.value = dprClamped();
+    opts.dpr = dpr; // tracked for signature parity; quad size is DPR-independent
   };
 
   const dispose = () => {

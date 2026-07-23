@@ -105,6 +105,8 @@
   pointer-events: auto;
   touch-action: none; /* no page scroll while manipulating the knob */
   user-select: none;
+  -webkit-user-select: none; /* Safari: never select the knob during a drag */
+  -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
   outline: none;
 }
@@ -120,6 +122,8 @@
   height: 56px;
   pointer-events: none;
   user-select: none;
+  -webkit-user-select: none; /* Safari: the knob image is never selectable */
+  -webkit-user-drag: none; /* Safari/WebKit: no native image drag-ghost */
   transition: transform 0.07s linear; /* short, smooth — never feels delayed */
   will-change: transform;
 }

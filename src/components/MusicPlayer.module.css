@@ -71,51 +71,23 @@
   width: 104px; /* hugs "PLAY TO MIX"; constant OFF↔ON so nothing shifts on toggle */
 }
 
-/* PLAY "Focus" feedback (desktop). A short mechanical impulse on the WHOLE pill —
-   the sole cue that a locked HP/LP knob was operated before playback started. It is
-   a transform-only animation (scale + a ≤~1.5px lift), so the icon + label move
-   together and their centring is untouched, and nothing reflows (no layout shift,
-   no glow, no colour, no blur). ~500ms, two impulses: an overshoot (1.035) then a
-   settle undershoot (0.99) back to rest. */
-.playFocus {
-  animation: playFocusKinetic 500ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: transform;
+/* PLAY "Focus" feedback is now the shared kinetic burst (KineticBurst wraps the
+   pill content in MusicPlayerControl) — the exact page-title / logo refraction
+   settle. No pill-local pulse/blink keyframes remain here. */
+
+/* Decorative full-pill "skin" cloned by the kinetic SURFACE burst so the whole
+   rounded pill silhouette (not just the lettering) participates in the Focus
+   burst. It reproduces the OFF-state pill (white fill, fully-rounded, no visible
+   stroke — the resting border is transparent), fills the burst layer, and is only
+   ever visible while the burst plays (the layer is hidden at rest). Never
+   interactive; the real button underneath is untouched. */
+.pillSkin {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #fff;
 }
-@keyframes playFocusKinetic {
-  0% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  20% {
-    transform: translate3d(0, -1.5px, 0) scale(1.035);
-  }
-  55% {
-    transform: translate3d(0, 0.5px, 0) scale(0.99);
-  }
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-/* Reduced motion: replace the movement with an immediate, non-animated
-   acknowledgement — a brief stepped opacity blink (no transform/motion, no glow,
-   not continuous). !important + the higher `.playFocus` specificity override the
-   global reduced-motion animation damping so the feedback is not removed entirely. */
-@media (prefers-reduced-motion: reduce) {
-  .playFocus {
-    animation-name: playFocusBlink !important;
-    animation-duration: 200ms !important;
-    animation-timing-function: steps(2, jump-none) !important;
-    animation-iteration-count: 1 !important;
-    will-change: auto;
-  }
-}
-@keyframes playFocusBlink {
-  0% {
-    opacity: 0.55;
-  }
-  100% {
-    opacity: 1;
-  }
-}
+
 .toggle:focus {
   outline: none;
 }
