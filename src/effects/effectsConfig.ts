@@ -446,6 +446,8 @@ export const telemetry = {
   playing: false,
   // --- Audio pipeline mode (LIVE_WEB_AUDIO desktop / PRECOMPUTED_MOBILE) -------
   mode: "LIVE_WEB_AUDIO" as string,
+  // Desktop transport (Stage A A/B): "buffer" (legacy) or "worklet" (sample-player).
+  transport: "buffer" as string,
   // Mobile DIRECT_HTML_MEDIA playback (HTMLAudioElement, media channel)
   mediaPaused: true,
   mediaMuted: false,

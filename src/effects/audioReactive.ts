@@ -65,7 +65,8 @@ type Graph = {
   fx: HeatFx; // scroll-driven Heat FX stage (post-analyser; dry at heat=0)
   freq: Uint8Array<ArrayBuffer>;
   buffer: AudioBuffer | null; // seamless loop buffer (null until decoded)
-  source: AudioBufferSourceNode | null; // the ONE playing source (or null)
+  source: AudioBufferSourceNode | null; // legacy transport: the ONE playing source
+  workletNode: AudioWorkletNode | null; // worklet transport: the sample-player node
   loopDuration: number; // seconds
 };
 
@@ -145,6 +146,37 @@ let srcStartOffset = 0; // offset the current source started at
 let wantPlay = false; // the app's desired state (should audio be playing?)
 let autoplayOnce = true; // one-shot autoplay attempt at load (after decode)
 let unlocked = false; // iOS Web Audio unlocked (silent buffer played in a gesture)
+
+// --- DESKTOP TRANSPORT SELECT (Stage A) -------------------------------------
+// Two mutually-exclusive desktop transports feed the SAME graph node (graph.hp):
+//   "buffer"  — the legacy AudioBufferSourceNode (default, unchanged; fallback).
+//   "worklet" — a ScratchSamplePlayer AudioWorklet (its read head is the single
+//               authoritative transport clock). Stage A is transport PARITY only:
+//               rate is fixed at 1, no scratch, no marquee.
+// Chosen ONCE from the URL (?transport=worklet) so an A/B on the preview never spawns
+// both. Only one is ever created/played, so the two are never audible simultaneously.
+type Transport = "buffer" | "worklet";
+let TRANSPORT: Transport | null = null;
+let workletModuleLoaded = false; // addModule() done once
+let workletReady = false; // node created + buffer delivered
+let workletPlaying = false; // desired/actual worklet play state
+let workletPos = 0; // latest read-head position reported by the worklet (samples)
+
+function transport(): Transport {
+  if (TRANSPORT) return TRANSPORT;
+  let t: Transport = "buffer";
+  try {
+    if (typeof window !== "undefined") {
+      const q = new URLSearchParams(window.location.search).get("transport");
+      if (q === "worklet") t = "worklet";
+    }
+  } catch {
+    /* default to the legacy buffer transport */
+  }
+  TRANSPORT = t;
+  telemetry.transport = t;
+  return t;
+}
 
 // --- PRECOMPUTED_MOBILE state (HTMLAudioElement + offline spectrum) ----------
 let mediaEl: HTMLAudioElement | null = null;
@@ -501,6 +533,7 @@ function ensureLiveGraph(): boolean {
     freq: new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount)),
     buffer: null,
     source: null,
+    workletNode: null,
     loopDuration: 0,
   };
   // Re-apply any amounts set before the graph was built (jump, no ramp needed).
@@ -510,7 +543,11 @@ function ensureLiveGraph(): boolean {
     visibilityHooked = true;
     document.addEventListener("visibilitychange", () => {
       if (document.hidden) zeroOut();
-      else if (graph && graph.source && graph.ctx.state === "suspended")
+      else if (
+        graph &&
+        (graph.source || workletPlaying) &&
+        graph.ctx.state === "suspended"
+      )
         graph.ctx.resume().catch(() => {}); // resume playback returning to fg
     });
   }
@@ -537,19 +574,35 @@ function ensureLiveGraph(): boolean {
         telemetry.loopStart = 0;
         telemetry.loopEnd = graph.loopDuration;
         telemetry.loopDuration = graph.loopDuration;
-        if (autoplayOnce) {
-          autoplayOnce = false;
-          graph.ctx
-            .resume()
-            .then(() => {
-              if (graph && graph.ctx.state === "running" && !unlocked) {
-                wantPlay = true;
-                reconcile();
-              }
-            })
-            .catch(() => {});
+        // Bring playback in line once the transport is actually ready.
+        const afterReady = () => {
+          if (autoplayOnce) {
+            autoplayOnce = false;
+            graph!.ctx
+              .resume()
+              .then(() => {
+                if (graph && graph.ctx.state === "running" && !unlocked) {
+                  wantPlay = true;
+                  reconcile();
+                }
+              })
+              .catch(() => {});
+          } else {
+            reconcile(); // a toggle before decode set the desired state
+          }
+        };
+        if (transport() === "worklet") {
+          // Worklet transport: build it, then reconcile. Any failure (unsupported /
+          // bad MIME) falls back to the legacy buffer transport so playback is safe.
+          setupWorklet()
+            .then(afterReady)
+            .catch(() => {
+              TRANSPORT = "buffer";
+              telemetry.transport = "buffer";
+              afterReady();
+            });
         } else {
-          reconcile(); // a toggle before decode set the desired state
+          afterReady();
         }
       })
       .catch(() => {
@@ -559,11 +612,79 @@ function ensureLiveGraph(): boolean {
   return true;
 }
 
-/** Current musical offset (seconds) within the seamless loop. */
+/** Current musical offset (seconds). Worklet transport → derived from the read head
+ *  it reports (the authoritative clock); buffer transport → the ctx-time estimate. */
 function currentOffset(): number {
+  if (transport() === "worklet") {
+    if (!graph || graph.loopDuration <= 0) return resumeOffset;
+    return (workletPos / graph.ctx.sampleRate) % graph.loopDuration;
+  }
   if (!graph || !graph.source) return resumeOffset;
   const elapsed = graph.ctx.currentTime - srcStartCtxTime;
   return (srcStartOffset + elapsed) % graph.loopDuration;
+}
+
+// --- Worklet transport (Stage A) --------------------------------------------
+/** Build the sample-player worklet ONCE and hand it the decoded loop buffer. Throws
+ *  on unsupported/failed load so the caller can fall back to the buffer transport. */
+async function setupWorklet(): Promise<void> {
+  if (!graph || !graph.buffer) throw new Error("no buffer");
+  const ctx = graph.ctx;
+  if (!ctx.audioWorklet || typeof AudioWorkletNode === "undefined")
+    throw new Error("AudioWorklet unsupported");
+  if (!workletModuleLoaded) {
+    await ctx.audioWorklet.addModule("/worklets/scratch-processor.js");
+    workletModuleLoaded = true;
+  }
+  const buf = graph.buffer;
+  const nc = buf.numberOfChannels;
+  const node = new AudioWorkletNode(ctx, "scratch-processor", {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [nc],
+  });
+  node.port.onmessage = (e: MessageEvent) => {
+    const d = e.data as { type?: string; pos?: number };
+    if (d && d.type === "pos" && typeof d.pos === "number") workletPos = d.pos;
+  };
+  // Copy each channel (so the original AudioBuffer is never detached) and TRANSFER
+  // the copies to the worklet thread (no clone).
+  const channels: Float32Array[] = [];
+  const xfer: ArrayBuffer[] = [];
+  for (let c = 0; c < nc; c++) {
+    const copy = buf.getChannelData(c).slice();
+    channels.push(copy);
+    xfer.push(copy.buffer as ArrayBuffer);
+  }
+  node.port.postMessage(
+    { type: "buffer", channels, length: buf.length, numChannels: nc, sampleRate: ctx.sampleRate },
+    xfer,
+  );
+  // Same insertion point as the buffer source: worklet → hp → lp → gain → analyser →
+  // Heat → destination. Held (silent) until play, so nothing is audible yet.
+  node.connect(graph.hp);
+  graph.workletNode = node;
+  workletReady = true;
+  telemetry.transport = "worklet";
+}
+
+/** Start the worklet transport. No seek — the read head already holds the correct
+ *  (frozen) position, so this resumes exactly; the worklet ramps in click-safe. */
+function startWorklet(): void {
+  if (!graph || !graph.workletNode) return;
+  graph.workletNode.port.postMessage({ type: "play" });
+  workletPlaying = true;
+  notifyPlaying(true);
+}
+
+/** Hold the worklet transport (freeze read head, ramp out click-safe), remembering
+ *  the position for telemetry/parity. */
+function stopWorklet(): void {
+  if (!graph || !graph.workletNode) return;
+  resumeOffset = currentOffset();
+  graph.workletNode.port.postMessage({ type: "hold" });
+  workletPlaying = false;
+  notifyPlaying(false);
 }
 
 /** Create a fresh looping source at `offset` with a tiny fade-in. */
@@ -641,6 +762,12 @@ function unlock(): void {
 /** Bring actual playback in line with the desired state `wantPlay` (LIVE). */
 function reconcile(): void {
   if (!graph || !graph.buffer) return;
+  if (transport() === "worklet") {
+    if (!workletReady) return; // setup pending → afterReady() will reconcile again
+    if (wantPlay && !workletPlaying) startWorklet();
+    else if (!wantPlay && workletPlaying) stopWorklet();
+    return;
+  }
   if (wantPlay && !graph.source) startSource(resumeOffset);
   else if (!wantPlay && graph.source) stopSource();
 }
@@ -752,6 +879,7 @@ export function togglePlayback(): void {
 export function isPlaying(): boolean {
   if (audioMode() === "PRECOMPUTED_MOBILE")
     return !!mediaEl && !mediaEl.paused;
+  if (transport() === "worklet") return workletPlaying;
   return !!(graph && graph.source);
 }
 
@@ -1016,8 +1144,14 @@ function writeModeTelemetry(): void {
     telemetry.audioSourceCount = mediaEl && !mediaEl.paused ? 1 : 0;
   } else if (graph) {
     telemetry.audioState = graph.ctx.state;
-    telemetry.audioSourceCount = graph.source ? 1 : 0;
+    // Exactly one active transport ever (never both audible): 0 or 1.
+    telemetry.audioSourceCount = (
+      transport() === "worklet" ? workletPlaying : !!graph.source
+    )
+      ? 1
+      : 0;
     telemetry.audioOffset = currentOffset();
+    telemetry.transport = transport();
   }
 }
 
@@ -1045,7 +1179,10 @@ export function tick(dtSec: number): void {
   if (mobile) {
     running = sampleMobile(); // fills mBands/mBMH when true
   } else {
-    running = !!graph && graph.ctx.state === "running" && !!graph.source;
+    running =
+      !!graph &&
+      graph.ctx.state === "running" &&
+      (transport() === "worklet" ? workletPlaying : !!graph.source);
   }
   writeModeTelemetry();
   updateHeat(running); // scroll-driven Heat (desktop); dry unless a playing Home
