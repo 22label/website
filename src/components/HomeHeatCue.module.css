@@ -1,0 +1,30 @@
+/* Approved Home interaction hint: "SCROLL TO GENERATE HEAT". A subtle, centred,
+   non-interactive caption. Sits above the WebGL canvas but below the corner UI and
+   the landscape blocker; pointer-events off so it never intercepts scroll/drag. */
+.cue {
+  position: fixed;
+  left: 50%;
+  bottom: 64px;
+  transform: translateX(-50%);
+  z-index: 5;
+  margin: 0;
+  pointer-events: none;
+  font-family: var(--font-clash-display), sans-serif;
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 1.1px; /* 11% of 10px */
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.55);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Mobile portrait: lift it clear of the bottom player/info bar. */
+@media (max-width: 767px) {
+  .cue {
+    bottom: 112px;
+    font-size: 9px;
+    letter-spacing: 0.99px;
+  }
+}

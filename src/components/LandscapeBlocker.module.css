@@ -1,6 +1,6 @@
 /* Full-viewport phone-landscape blocker. Fully opaque, above everything, blocks
-   all pointer/touch on the UI underneath. 2H2H treatment (Figma 230:779): diagonal
-   charcoal→black gradient, Clash Display, uppercase, centred. */
+   all pointer/touch on the UI underneath. Solid pure-black background (no gradient,
+   highlight or texture) — Clash Display, uppercase, centred. */
 .blocker {
   position: fixed;
   inset: 0;
@@ -9,11 +9,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: linear-gradient(
-    116.8deg,
-    rgb(44, 52, 62) 17.843%,
-    rgb(0, 0, 0) 83.03%
-  );
+  background: #000; /* pure black — fully opaque, nothing of the page shows through */
   pointer-events: auto; /* swallow all interaction with the site behind it */
   -webkit-user-select: none;
   user-select: none;

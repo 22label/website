@@ -99,6 +99,9 @@ function Knob({
   const heldRef = useRef(false);
   const pointerIdRef = useRef<number | null>(null);
   const lastYRef = useRef(0);
+  const pendingRef = useRef(0); // latest drag target awaiting a frame-batched commit
+  const rafRef = useRef(0); // active requestAnimationFrame id (0 = none)
+  const mountedRef = useRef(true);
 
   // Input direction. HP engages by scrolling/dragging/arrowing UP; LP is the
   // mirror image of HP, so it engages DOWN (scroll/drag down or ArrowDown) and
@@ -111,11 +114,28 @@ function Knob({
     (a: number) => {
       const c = a < 0 ? 0 : a > 1 ? 1 : a; // clamp 0..1
       valueRef.current = c;
+      pendingRef.current = c; // keep the drag base in sync (wheel/keyboard/commit)
       setAmount(c);
       apply(c); // drive the real filter (smoothly automated in the audio layer)
     },
     [apply],
   );
+
+  // Frame-batched drag commit. A drag can fire a BURST of pointermove events per
+  // frame (especially in Firefox); committing each one issues a React render + an
+  // audio update, and the knob's CSS transform transition re-interpolates on every
+  // render → the rotation stutters. Instead the moves only accumulate `pendingRef`;
+  // a single rAF then commits the LATEST value once per frame (one render, one audio
+  // write). It uses the newest value, never an averaged/delayed one, so there is no
+  // lag — the visual rotation and the filter value advance together, one per frame.
+  const commitFrame = useCallback(() => {
+    rafRef.current = 0;
+    set(pendingRef.current);
+  }, [set]);
+  const scheduleFrame = useCallback(() => {
+    if (rafRef.current) return; // one pending frame at a time (coalesce this frame)
+    rafRef.current = requestAnimationFrame(commitFrame);
+  }, [commitFrame]);
 
   // End the hold: idempotent, always releases pointer capture + clears state and
   // the document selection lock. Runs on pointerup/cancel/lostcapture/blur/unmount.
@@ -125,15 +145,27 @@ function Knob({
     const el = knobRef.current;
     const pid = pointerIdRef.current;
     pointerIdRef.current = null;
-    if (el && pid !== null) {
-      try {
-        el.releasePointerCapture(pid);
-      } catch {
-        /* already released */
+    // Flush any sub-frame movement that arrived after the last committed frame, then
+    // drop the scheduled frame — so the knob ends exactly where the pointer left it.
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+    }
+    if (mountedRef.current && pendingRef.current !== valueRef.current) {
+      set(pendingRef.current);
+    }
+    if (el) {
+      el.removeAttribute("data-dragging"); // restore the transform transition
+      if (pid !== null) {
+        try {
+          el.releasePointerCapture(pid);
+        } catch {
+          /* already released */
+        }
       }
     }
     unlockDocumentSelection(); // balances the lock taken in onPointerDown
-  }, []);
+  }, [set]);
 
   // Wheel: only while HELD → adjust + preventDefault (block page scroll). When not
   // held, pass through so the page scrolls normally. Native + non-passive so
@@ -165,11 +197,22 @@ function Knob({
     };
   }, [endHold]);
 
+  // Declared LAST so its cleanup runs FIRST on unmount — flips mounted false before
+  // the blur effect's endHold, so no state is committed after unmount.
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (heldRef.current) return; // ignore extra pointers/buttons
     heldRef.current = true;
     pointerIdRef.current = e.pointerId;
     lastYRef.current = e.clientY;
+    pendingRef.current = valueRef.current; // drag accumulates from the current value
+    // Suppress the transform transition during the drag so the rotation follows the
+    // pointer 1:1 (the ~70ms transition otherwise trails each frame's update); it is
+    // restored in endHold, keeping the transition for discrete wheel/keyboard steps.
+    e.currentTarget.setAttribute("data-dragging", "1");
     // Suppress page text selection for the whole drag (Safari) — released in
     // endHold on every termination path. Done here (not via preventDefault) so the
     // knob still focuses and keyboard control is preserved.
@@ -184,15 +227,38 @@ function Knob({
   };
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!heldRef.current || e.pointerId !== pointerIdRef.current) return;
-    const dy = lastYRef.current - e.clientY; // drag up = +dy (incremental)
-    lastYRef.current = e.clientY;
-    if (dy === 0) return;
     if (locked) {
+      lastYRef.current = e.clientY;
       onLockedAttempt(); // no value change while locked
       return;
     }
-    // `dir` mirrors LP: drag up increases HP but returns LP toward neutral.
-    set(valueRef.current + dir * dy * DRAG_SENS);
+    // Accumulate the delta across any coalesced sub-events (a single dispatch can
+    // carry several moves) so fast drags aren't under-counted; clamp per step so a
+    // knob pinned at a bound reverses instantly with no dead zone. Fall back to the
+    // event's own clientY where getCoalescedEvents is unavailable (older browsers).
+    const native = e.nativeEvent;
+    const evs =
+      typeof native.getCoalescedEvents === "function"
+        ? native.getCoalescedEvents()
+        : null;
+    let target = pendingRef.current;
+    if (evs && evs.length > 0) {
+      for (let i = 0; i < evs.length; i++) {
+        const y = evs[i].clientY;
+        target += dir * (lastYRef.current - y) * DRAG_SENS;
+        lastYRef.current = y;
+        target = target < 0 ? 0 : target > 1 ? 1 : target;
+      }
+    } else {
+      target += dir * (lastYRef.current - e.clientY) * DRAG_SENS;
+      lastYRef.current = e.clientY;
+      target = target < 0 ? 0 : target > 1 ? 1 : target;
+    }
+    if (target === pendingRef.current) return; // no net movement this event
+    pendingRef.current = target;
+    // `dir` mirrors LP: drag up increases HP but returns LP toward neutral. The
+    // value is committed once per frame by scheduleFrame (no render per raw event).
+    scheduleFrame();
   };
   const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerId === pointerIdRef.current) endHold();

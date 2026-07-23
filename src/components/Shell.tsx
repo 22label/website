@@ -5,6 +5,7 @@ import DesktopRail from "@/components/DesktopRail";
 import MobileBottom from "@/components/MobileBottom";
 import EffectsDebugPanel from "@/components/EffectsDebugPanel";
 import PersistentScene from "@/components/PersistentScene";
+import HomeHeatCue from "@/components/HomeHeatCue";
 import LogoLink from "@/components/LogoLink";
 import KineticLogo from "@/components/KineticLogo";
 import styles from "./Shell.module.css";
@@ -23,6 +24,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
       {/* Cursor trail now lives inside the Monogram WebGL pass (desktop-only),
           stencil-masked to the real monogram silhouette. */}
+
+      {/* Home-only: gates the scroll-driven audio Heat + the approved instruction
+          label (heat engages only while music plays, using telemetry.heat). */}
+      <HomeHeatCue />
 
       {children}
 

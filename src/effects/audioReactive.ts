@@ -62,10 +62,28 @@ type Graph = {
   analyser: AnalyserNode;
   hp: BiquadFilterNode; // MIXER high-pass (desktop) — neutral until swept
   lp: BiquadFilterNode; // MIXER low-pass  (desktop) — neutral until swept
+  fx: HeatFx; // scroll-driven Heat FX stage (post-analyser; dry at heat=0)
   freq: Uint8Array<ArrayBuffer>;
   buffer: AudioBuffer | null; // seamless loop buffer (null until decoded)
   source: AudioBufferSourceNode | null; // the ONE playing source (or null)
   loopDuration: number; // seconds
+};
+
+// The Heat FX stage's automatable wet sends + fixed nodes. Created ONCE with the
+// graph and never recreated; only the three wet GainNodes move (scaled by the Home
+// scroll heat), so scrolling issues no node churn.
+type HeatFx = {
+  input: GainNode; // stage tap (analyser → input)
+  dry: GainNode; // constant unity pass-through (the untouched playback)
+  delay: DelayNode;
+  delayFb: GainNode; // bounded feedback (< 1, always decays)
+  delayWet: GainNode; // 0 → HEAT_DELAY_WET
+  convolver: ConvolverNode;
+  revWet: GainNode; // 0 → HEAT_REVERB_WET
+  shaper: WaveShaperNode;
+  satMakeup: GainNode;
+  satWet: GainNode; // 0 → HEAT_SAT_WET
+  output: GainNode; // sums dry + wet → destination
 };
 
 // --- MIXER filter sweep (desktop) -------------------------------------------
@@ -81,6 +99,28 @@ const FILTER_TAU = 0.03; // AudioParam smoothing time-constant (s)
 let hpAmount = 0; // persisted so a value set before the graph exists still applies
 let lpAmount = 0;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+// --- HEAT FX (desktop) ------------------------------------------------------
+// A restrained, scroll-driven warmth/space stage placed AFTER the analyser, so
+// HP/LP, the waveform and the dry sound are untouched (the analyser sees the same
+// pre-Heat signal). Three PARALLEL wet sends (short delay, light reverb, warm
+// saturation) blend beside a constant unity dry path — the dry playback is never
+// altered, and at heat=0 every wet send is silent → bit-transparent. All wet
+// amounts scale 0→max by the authoritative Home scroll heat (telemetry.heat), and
+// only while HOME is mounted (heatEnabled) AND music is playing. Values sit inside
+// the approved guardrails; automation is setTargetAtTime (zipper-free).
+const HEAT_DELAY_S = 0.07; // 70ms slapback (guardrail 50–90ms)
+const HEAT_DELAY_FB = 0.28; // bounded feedback — subtle repeats, always < 1 (decays)
+const HEAT_DELAY_WET = 0.05; // max delay wet send (guardrail ~4–6%)
+const HEAT_REVERB_S = 0.4; // short synthetic impulse (light room)
+const HEAT_REVERB_DECAY = 3.0; // impulse decay exponent
+const HEAT_REVERB_WET = 0.08; // max reverb wet send (guardrail ~6–10%)
+const HEAT_SAT_K = 2.0; // tanh(k·x)/k → unity small-signal slope, gentle peak soft-clip
+const HEAT_SAT_MAKEUP = 1.3; // light comp so the peak-compressed copy reads ~unity
+const HEAT_SAT_WET = 0.06; // max saturation wet send (guardrail ~5–8%)
+const HEAT_TAU = 0.1; // wet-gain automation smoothing (s) — no clicks/zipper
+let heatEnabled = false; // Home gate (set by the Home cue on mount/unmount)
+let heatSuppressed = false; // future Scratch hook — inert until explicitly activated
 
 // --- LIVE_WEB_AUDIO state (desktop) -----------------------------------------
 let graph: Graph | null = null;
@@ -162,6 +202,124 @@ function makeSeamlessLoop(ctx: BaseAudioContext, src: AudioBuffer): AudioBuffer 
     }
   }
   return out;
+}
+
+// --- HEAT FX builders -------------------------------------------------------
+/** Short, light synthetic reverb impulse: exponentially-decaying stereo noise. */
+function makeHeatImpulse(
+  ctx: BaseAudioContext,
+  seconds: number,
+  decay: number,
+): AudioBuffer {
+  const rate = ctx.sampleRate;
+  const len = Math.max(1, Math.floor(rate * seconds));
+  const buf = ctx.createBuffer(2, len, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return buf;
+}
+
+/** Warm saturation curve = tanh(k·x)/k: unity slope at 0 (small signals pass
+ *  through untouched) with a gentle symmetric soft-clip on peaks → warm odd
+ *  harmonics, and NO small-signal level increase. */
+function makeSatCurve(k: number): Float32Array<ArrayBuffer> {
+  const n = 1024;
+  const c = new Float32Array(new ArrayBuffer(n * 4)); // <ArrayBuffer> for WaveShaper.curve
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    // tanh(k·x)/k → slope 1 at x=0 (small signals unchanged), soft-clipped peaks.
+    c[i] = Math.tanh(k * x) / k;
+  }
+  return c;
+}
+
+/** Build the post-analyser Heat FX stage. Dry is a constant unity path; the three
+ *  wet sends start silent (0) and are opened by updateHeat(). Returns the handles
+ *  updateHeat automates. Graph: source → hp → lp → gain → analyser → INPUT →
+ *  (dry ‖ delay ‖ reverb ‖ saturation) → OUTPUT → destination. */
+function buildHeatFx(ctx: AudioContext, tap: AudioNode): HeatFx {
+  const input = ctx.createGain();
+  input.gain.value = 1;
+  const output = ctx.createGain();
+  output.gain.value = 1;
+  const dry = ctx.createGain();
+  dry.gain.value = 1;
+
+  const delay = ctx.createDelay(0.5);
+  delay.delayTime.value = HEAT_DELAY_S;
+  const delayFb = ctx.createGain();
+  delayFb.gain.value = HEAT_DELAY_FB;
+  const delayWet = ctx.createGain();
+  delayWet.gain.value = 0;
+
+  const convolver = ctx.createConvolver();
+  convolver.normalize = true;
+  convolver.buffer = makeHeatImpulse(ctx, HEAT_REVERB_S, HEAT_REVERB_DECAY);
+  const revWet = ctx.createGain();
+  revWet.gain.value = 0;
+
+  const shaper = ctx.createWaveShaper();
+  shaper.curve = makeSatCurve(HEAT_SAT_K);
+  shaper.oversample = "2x";
+  const satMakeup = ctx.createGain();
+  satMakeup.gain.value = HEAT_SAT_MAKEUP;
+  const satWet = ctx.createGain();
+  satWet.gain.value = 0;
+
+  // Dry (unity, bit-transparent) — the untouched playback.
+  tap.connect(input);
+  input.connect(dry);
+  dry.connect(output);
+  // Delay send with bounded internal feedback (subtle slapback).
+  input.connect(delay);
+  delay.connect(delayFb);
+  delayFb.connect(delay);
+  delay.connect(delayWet);
+  delayWet.connect(output);
+  // Reverb send (short light room).
+  input.connect(convolver);
+  convolver.connect(revWet);
+  revWet.connect(output);
+  // Parallel warm saturation send.
+  input.connect(shaper);
+  shaper.connect(satMakeup);
+  satMakeup.connect(satWet);
+  satWet.connect(output);
+
+  output.connect(ctx.destination);
+  return {
+    input,
+    dry,
+    delay,
+    delayFb,
+    delayWet,
+    convolver,
+    revWet,
+    shaper,
+    satMakeup,
+    satWet,
+    output,
+  };
+}
+
+/** Per-frame Heat automation (LIVE/desktop only). Opens the three wet sends toward
+ *  their guarded maxima scaled by the authoritative Home scroll heat — but only
+ *  while HOME is mounted, not suppressed (future Scratch), and music is running;
+ *  otherwise it ramps every send back to fully dry. All moves are setTargetAtTime
+ *  (zipper-free); no nodes are created/destroyed. */
+function updateHeat(running: boolean): void {
+  if (!graph) return;
+  const fx = graph.fx;
+  const on = heatEnabled && !heatSuppressed && running;
+  const h = on ? clamp01(telemetry.heat) : 0;
+  const t = graph.ctx.currentTime;
+  fx.delayWet.gain.setTargetAtTime(HEAT_DELAY_WET * h, t, HEAT_TAU);
+  fx.revWet.gain.setTargetAtTime(HEAT_REVERB_WET * h, t, HEAT_TAU);
+  fx.satWet.gain.setTargetAtTime(HEAT_SAT_WET * h, t, HEAT_TAU);
 }
 
 // ============================================================================
@@ -289,13 +447,16 @@ function ensureLiveGraph(): boolean {
   hp.connect(lp);
   lp.connect(gain);
   gain.connect(analyser);
-  analyser.connect(ctx.destination);
+  // Heat FX stage inserted AFTER the analyser: the waveform + HP/LP see the same
+  // pre-Heat signal, and at heat=0 the dry path is bit-transparent to destination.
+  const fx = buildHeatFx(ctx, analyser);
   graph = {
     ctx,
     gain,
     analyser,
     hp,
     lp,
+    fx,
     freq: new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount)),
     buffer: null,
     source: null,
@@ -592,6 +753,20 @@ export function setLpAmount(amount: number): void {
   applyLp(amount);
 }
 
+// --- HEAT gate (desktop) ----------------------------------------------------
+/** Home gate for the scroll-driven Heat FX. The Home cue calls this true on mount
+ *  and false on unmount, so Heat only engages on a PLAYING Home and ramps fully dry
+ *  everywhere else (route leave included). No-op on mobile (no Web Audio graph). */
+export function setHeatEnabled(on: boolean): void {
+  heatEnabled = on;
+}
+/** Future Scratch hook: force Heat to dry (smoothly) while a scratch is active,
+ *  then restore the scroll-derived amount when released. INERT until a Scratch
+ *  implementation calls it — it is never triggered by the current code paths. */
+export function setHeatSuppressed(on: boolean): void {
+  heatSuppressed = on;
+}
+
 /** Smoothed bands already scaled by the fade envelope (0 when silent/paused). */
 export function getBands(): { bass: number; mid: number; high: number } {
   return {
@@ -815,6 +990,7 @@ export function tick(dtSec: number): void {
   const wantHeatmap = EFFECTS.ENABLE_DESKTOP_SPECTRAL_HEATMAP;
   if (!wantPulse && !wantHeatmap) {
     if (env !== 0 || bands.bass !== 0) zeroOut();
+    updateHeat(false); // keep Heat ramping to dry even when reactive data is off
     computeHeatmap(0, false); // settle heatmap to zero
     return;
   }
@@ -831,6 +1007,7 @@ export function tick(dtSec: number): void {
     running = !!graph && graph.ctx.state === "running" && !!graph.source;
   }
   writeModeTelemetry();
+  updateHeat(running); // scroll-driven Heat (desktop); dry unless a playing Home
 
   const envTarget = playingTarget && running ? 1 : 0;
   const fadeRate = 1000 / (envTarget > env ? PULSE.fadeInMs : PULSE.fadeOutMs);
