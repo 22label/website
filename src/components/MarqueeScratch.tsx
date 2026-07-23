@@ -123,9 +123,7 @@ export default function MarqueeScratch() {
   }, [enabled, isHome]);
 
   if (!enabled || !isHome) return null;
-  return (
-    <div ref={zoneRef} className={styles.zone} aria-hidden="true">
-      <p className={styles.label}>[DRAG TO SCRATCH]</p>
-    </div>
-  );
+  // Drag hit-area only — the visible label was removed (an icon will come later);
+  // the zone, its size/position and all pointer behaviour are unchanged.
+  return <div ref={zoneRef} className={styles.zone} aria-hidden="true" />;
 }
