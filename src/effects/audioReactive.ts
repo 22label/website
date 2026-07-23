@@ -162,6 +162,8 @@ let workletReady = false; // node created + buffer delivered
 let workletPlaying = false; // desired/actual worklet play state
 let workletPos = 0; // latest read-head position reported by the worklet (samples)
 
+let workletError = ""; // last worklet-setup failure reason (surfaced to the test hook)
+
 function transport(): Transport {
   if (TRANSPORT) return TRANSPORT;
   let t: Transport = "buffer";
@@ -176,6 +178,37 @@ function transport(): Transport {
   TRANSPORT = t;
   telemetry.transport = t;
   return t;
+}
+
+/** Attach the Stage B signed-rate control + a transport-state readout on `window`.
+ *  Done SYNCHRONOUSLY at graph creation (worklet flag only) so the hook's existence
+ *  never depends on the async worklet setup succeeding — a fallback still leaves the
+ *  hook present (it just reports/ warns that the worklet isn't active). */
+function attachWorkletHooks(): void {
+  if (typeof window === "undefined") return;
+  const w = window as unknown as {
+    __h2hScratchRate?: (r: number) => void;
+    __h2hScratchInfo?: () => Record<string, unknown>;
+  };
+  w.__h2hScratchRate = setScratchRate;
+  w.__h2hScratchInfo = () => ({
+    transport: transport(),
+    workletReady,
+    workletPlaying,
+    hasNode: !!(graph && graph.workletNode),
+    workletError: workletError || null,
+  });
+}
+
+/** One-line console readout of the resolved desktop transport (worklet flag, or any
+ *  worklet fallback) so a silent buffer fallback is visible on the preview. */
+function logTransport(): void {
+  if (typeof console === "undefined") return;
+  if (transport() !== "worklet" && !workletError) return;
+  console.info(
+    `[h2h] audio transport=${transport()} workletReady=${workletReady}` +
+      (workletError ? ` (worklet setup failed: ${workletError})` : ""),
+  );
 }
 
 // --- PRECOMPUTED_MOBILE state (HTMLAudioElement + offline spectrum) ----------
@@ -539,6 +572,9 @@ function ensureLiveGraph(): boolean {
   // Re-apply any amounts set before the graph was built (jump, no ramp needed).
   applyHp(hpAmount, true);
   applyLp(lpAmount, true);
+  // Expose the Stage B test hook NOW (worklet flag), before the async worklet setup,
+  // so it is always available on the preview regardless of setup success/fallback.
+  if (transport() === "worklet") attachWorkletHooks();
   if (!visibilityHooked) {
     visibilityHooked = true;
     document.addEventListener("visibilitychange", () => {
@@ -593,12 +629,20 @@ function ensureLiveGraph(): boolean {
         };
         if (transport() === "worklet") {
           // Worklet transport: build it, then reconcile. Any failure (unsupported /
-          // bad MIME) falls back to the legacy buffer transport so playback is safe.
+          // bad MIME) falls back to the legacy buffer transport so playback is safe;
+          // the reason is captured + logged so the fallback is never silent.
           setupWorklet()
-            .then(afterReady)
-            .catch(() => {
+            .then(() => {
+              logTransport();
+              afterReady();
+            })
+            .catch((err: unknown) => {
+              workletError = String(
+                (err as { message?: string })?.message || err,
+              );
               TRANSPORT = "buffer";
               telemetry.transport = "buffer";
+              logTransport();
               afterReady();
             });
         } else {
@@ -665,22 +709,27 @@ async function setupWorklet(): Promise<void> {
   node.connect(graph.hp);
   graph.workletNode = node;
   workletReady = true;
+  workletError = "";
   telemetry.transport = "worklet";
-  // Stage B preview/test hook: drive the signed scratch rate from the console with
-  // no UI (Stage C will replace the caller with the marquee). Worklet transport only.
-  if (typeof window !== "undefined") {
-    (window as unknown as { __h2hScratchRate?: (r: number) => void }).__h2hScratchRate =
-      setScratchRate;
-  }
+  // (The window test hook is attached earlier, at graph creation, so its existence
+  // never depends on this async setup completing.)
 }
 
 /** Stage B: set the SIGNED scratch playback rate on the worklet transport. The rate
  *  is applied INSIDE the worklet DSP (sanitised there): 1 = normal, <0 = reverse,
- *  0 = stationary (safe/silent), fractional = speed/pitch. No-op unless the worklet
- *  transport is active — the legacy buffer transport and mobile are never affected. */
+ *  0 = stationary (safe/silent), fractional = speed/pitch. Warns (never throws) if
+ *  the worklet transport isn't active, so a silent buffer fallback is visible; the
+ *  legacy buffer transport and mobile are never affected. */
 export function setScratchRate(rate: number): void {
-  if (transport() !== "worklet") return;
-  if (!graph || !graph.workletNode) return;
+  if (transport() !== "worklet" || !graph || !graph.workletNode) {
+    if (typeof console !== "undefined")
+      console.warn(
+        `[h2h] scratch rate ignored — transport=${transport()} workletReady=${workletReady} hasNode=${!!(
+          graph && graph.workletNode
+        )}` + (workletError ? ` (worklet setup failed: ${workletError})` : ""),
+      );
+    return;
+  }
   graph.workletNode.port.postMessage({ type: "rate", rate });
 }
 
