@@ -167,18 +167,31 @@ let workletError = ""; // last worklet-setup failure reason (surfaced to the tes
 
 function transport(): Transport {
   if (TRANSPORT) return TRANSPORT;
-  let t: Transport = "buffer";
+  // Production default: the approved AudioWorklet transport (enables Scratch). Only
+  // ever consulted on the LIVE (desktop non-touch) graph — touch devices use the
+  // PRECOMPUTED_MOBILE HTMLAudioElement path and never build a graph or call this.
+  // `?transport=buffer` forces the legacy source (diagnostic opt-out); a failed
+  // worklet setup also falls back to buffer (setupWorklet's catch).
+  let t: Transport = "worklet";
   try {
     if (typeof window !== "undefined") {
       const q = new URLSearchParams(window.location.search).get("transport");
-      if (q === "worklet") t = "worklet";
+      if (q === "buffer") t = "buffer";
     }
   } catch {
-    /* default to the legacy buffer transport */
+    /* keep the default */
   }
   TRANSPORT = t;
   telemetry.transport = t;
   return t;
+}
+
+/** Whether the desktop worklet transport is selected (production default; opt out
+ *  with `?transport=buffer`). Gate UI with `audioMode() === "LIVE_WEB_AUDIO"` too, so
+ *  touch devices (mobile + touch desktops, which use the HTMLAudioElement path) are
+ *  excluded. A later worklet-setup failure flips this to "buffer" (fallback). */
+export function isWorkletTransport(): boolean {
+  return transport() === "worklet";
 }
 
 /** Attach the Stage B signed-rate control + a transport-state readout on `window`.

@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { setScratchRate, setHeatSuppressed } from "@/effects/audioReactive";
+import {
+  setScratchRate,
+  setHeatSuppressed,
+  isWorkletTransport,
+  audioMode,
+} from "@/effects/audioReactive";
 import { createScratchDrag } from "@/effects/marqueeScratchDrag.mjs";
 import { setMarqueeScratch } from "@/effects/scratchBridge.mjs";
 import styles from "./MarqueeScratch.module.css";
@@ -31,13 +36,15 @@ export default function MarqueeScratch() {
   // hydration flash). The worklet flag can't change without a reload.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let worklet = false;
-    try {
-      worklet =
-        new URLSearchParams(window.location.search).get("transport") === "worklet";
-    } catch {
-      worklet = false;
-    }
+    // Scratch = the SUPPORTED DESKTOP experience only: the LIVE (non-touch) Web Audio
+    // path AND the worklet transport (production default; `?transport=buffer` opts
+    // out) AND AudioWorklet actually supported. Touch devices (mobile + touch
+    // desktops → PRECOMPUTED_MOBILE HTMLAudioElement) get no scratch and are
+    // unchanged. Desktop width gate unchanged.
+    const worklet =
+      audioMode() === "LIVE_WEB_AUDIO" &&
+      isWorkletTransport() &&
+      typeof window.AudioWorkletNode !== "undefined";
     const mq = window.matchMedia("(min-width: 768px)");
     const update = () => setEnabled(worklet && mq.matches);
     update();
