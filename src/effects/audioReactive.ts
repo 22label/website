@@ -21,6 +21,7 @@
  * (getBands/getEnv/getHeatmap/tick) is identical for both modes.
  */
 import { EFFECTS, HEATMAP, PULSE, telemetry } from "./effectsConfig";
+import { heatTarget } from "./heatTarget.mjs";
 
 const AUDIO_URL = "/audio/intruder-snippet.mp3";
 const SPECTRUM_BIN_URL = "/audio/intruder-spectrum.bin";
@@ -197,6 +198,10 @@ function attachWorkletHooks(): void {
     workletPlaying,
     hasNode: !!(graph && graph.workletNode),
     workletError: workletError || null,
+    // Stage D coexistence: heatSuppressed flips true while scratching; heatAudio is
+    // the APPLIED heat (0 while suppressed, else the scroll-derived amount).
+    heatSuppressed,
+    heatAudio: telemetry.heatAudio,
   });
 }
 
@@ -416,8 +421,10 @@ function buildHeatFx(ctx: AudioContext, tap: AudioNode): HeatFx {
 function updateHeat(running: boolean): void {
   if (!graph) return;
   const fx = graph.fx;
-  const on = heatEnabled && !heatSuppressed && running;
-  const h = on ? clamp01(telemetry.heat) : 0;
+  // Coexistence policy: dry unless Home-enabled + running + NOT scratch-suppressed.
+  // A scratch (setHeatSuppressed) ducks the FX to dry here without touching the
+  // scroll-derived telemetry.heat, so the amount is restored the moment it ends.
+  const h = heatTarget(heatEnabled, heatSuppressed, running, telemetry.heat);
   const t = graph.ctx.currentTime;
   fx.delayWet.gain.setTargetAtTime(HEAT_DELAY_WET * h, t, HEAT_TAU);
   fx.revWet.gain.setTargetAtTime(HEAT_REVERB_WET * h, t, HEAT_TAU);

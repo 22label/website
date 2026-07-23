@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { setScratchRate } from "@/effects/audioReactive";
+import { setScratchRate, setHeatSuppressed } from "@/effects/audioReactive";
 import { createScratchDrag } from "@/effects/marqueeScratchDrag.mjs";
 import { setMarqueeScratch } from "@/effects/scratchBridge.mjs";
 import styles from "./MarqueeScratch.module.css";
@@ -51,11 +51,13 @@ export default function MarqueeScratch() {
     if (!el) return;
 
     // The SAME signed rate drives the audio (Stage B/C, unchanged) AND the visual
-    // marquee via the bridge — one gesture state machine, no second one.
+    // marquee via the bridge — one gesture state machine, no second one. Engaging a
+    // scratch also ducks the scroll-Heat FX to dry (Stage D) for a clean scratch path.
     const drag = createScratchDrag({
       onRate: (r) => {
         setScratchRate(r);
         setMarqueeScratch(true, r);
+        setHeatSuppressed(true); // Stage D: duck Heat FX to dry while scratching
       },
     });
     let pointerId = -1;
@@ -68,6 +70,7 @@ export default function MarqueeScratch() {
     const end = () => {
       drag.end(); // audio: restores rate 1 if a scratch was engaged
       setMarqueeScratch(false, 1); // visual: hand the marquee back to its idle scroll
+      setHeatSuppressed(false); // Stage D: restore the current scroll-derived Heat
       if (raf) {
         cancelAnimationFrame(raf);
         raf = 0;
