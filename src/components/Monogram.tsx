@@ -32,6 +32,7 @@ import {
   marqueeScratchActive,
   marqueeScratchRate,
 } from "@/effects/scratchBridge.mjs";
+import { setMonogramHovered } from "@/effects/monogramHover.mjs";
 import {
   currentVisual as portalVisual,
   getPortalState,
@@ -917,7 +918,11 @@ export default function Monogram({
         if (!cursorTrail) return;
         if (e.pointerType === "mouse") {
           // Desktop hover — UNCHANGED: sample wherever the ray hits the monogram.
-          if (trailHit(e.clientX, e.clientY)) cursorTrail.sample(e.clientX, e.clientY);
+          // Also publish the silhouette-hit so the DOM scratch overlay can drop its
+          // scratch cursor here (the trail is this region's affordance, left as-is).
+          const hit = trailHit(e.clientX, e.clientY);
+          setMonogramHovered(hit);
+          if (hit) cursorTrail.sample(e.clientX, e.clientY);
         } else if (e.pointerId === trailTouchId) {
           // Active primary touch only, and only over the monogram silhouette (off
           // the shape → no new samples; the existing trail decays on its own).
@@ -1898,6 +1903,7 @@ export default function Monogram({
         window.removeEventListener("pointerdown", onTrailDown);
         window.removeEventListener("pointerup", onTrailUp);
         window.removeEventListener("pointercancel", onTrailUp);
+        setMonogramHovered(false); // scene gone → no silhouette to suppress over
         // Hand the single audio rAF back to the engine (player bar keeps working
         // on routes without the WebGL scene).
         setAudioDriver(false);

@@ -12,7 +12,10 @@
   height: clamp(160px, 30vh, 420px);
   z-index: 4;
   pointer-events: auto; /* captures the horizontal scratch drag */
-  cursor: ew-resize; /* horizontal-drag affordance (like a record surface) */
+  /* Custom scratch cursor over the scratchable marquee content (Figma `scratch-icon`,
+     48×48, centred hotspot at 24 24). Falls back to ew-resize where SVG cursors are
+     unsupported (e.g. Safari) — still a valid horizontal-drag affordance. */
+  cursor: url("/assets/svg/scratch-icon.svg") 24 24, ew-resize;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -22,21 +25,52 @@
   touch-action: none; /* desktop-only zone; avoids any stray gesture interference */
 }
 
-/* Approved desktop interaction copy — matches the [SCROLL TO GENERATE HEAT] system
-   (Clash Display Regular, uppercase, square brackets, white). Non-interactive: the
-   zone captures the drag, the label just labels it. */
-.label {
+/* Over the monogram silhouette the scratch cursor is dropped: the monogram owns the
+   cursor-trail affordance and must stay unchanged, so we revert to the normal pointer
+   there (scratch still engages — only the icon is suppressed). Toggled from JS via the
+   monogramHover bridge (Monogram's raycast is the authority). */
+.zone.overMonogram {
+  cursor: default;
+}
+
+/* First-time desktop helper — Figma node 246:1536 "[ DRAG TO SCRATCH ]".
+   Clash Display Regular 18px / 1.98px tracking / solid white, single line, positioned
+   above the marquee band at the 64px viewport-left margin. Non-interactive; above the
+   WebGL scene (z 0), below the corner UI; fades out on the first marquee interaction.
+   The visual marquee band is centred at 50% and is 406px × min(1, vw/1728) tall
+   (Monogram: bandTop = (height − uBandH)/2, uBandH = MARQUEE_BAND_H·marqueeScale), so
+   its half-height maxes out at 203px. Anchoring the label 203px + a 40px gap above
+   centre clears the marquee text at every desktop width (narrower widths shrink the
+   band → only more clearance). */
+.hint {
+  position: fixed;
+  left: 64px;
+  top: calc(50% - 203px - 40px);
+  z-index: 5;
   margin: 0;
+  padding: 0;
   pointer-events: none;
   font-family: var(--font-clash-display), sans-serif;
-  font-weight: 400;
+  font-weight: 400; /* Clash Display Regular */
   font-size: 18px;
   letter-spacing: 1.98px; /* 11% of 18px */
   line-height: normal;
-  text-transform: uppercase;
   white-space: nowrap;
-  color: #fff;
-  opacity: 0.7;
+  color: #fff; /* solid white, 100% opacity */
   user-select: none;
   -webkit-user-select: none;
+  opacity: 1;
+  transition: opacity 280ms ease; /* quick, smooth fade-out on first interaction */
+}
+
+/* First marquee interaction → fade out quickly and smoothly, then unmount. */
+.hint.hintFading {
+  opacity: 0;
+}
+
+/* Reduced motion: no fade animation — it simply disappears when dismissed. */
+@media (prefers-reduced-motion: reduce) {
+  .hint {
+    transition: none;
+  }
 }

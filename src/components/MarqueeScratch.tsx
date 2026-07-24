@@ -10,6 +10,10 @@ import {
 } from "@/effects/audioReactive";
 import { createScratchDrag } from "@/effects/marqueeScratchDrag.mjs";
 import { setMarqueeScratch } from "@/effects/scratchBridge.mjs";
+import {
+  isMonogramHovered,
+  subscribeMonogramHover,
+} from "@/effects/monogramHover.mjs";
 import styles from "./MarqueeScratch.module.css";
 
 /**
@@ -25,12 +29,55 @@ import styles from "./MarqueeScratch.module.css";
  * (pointerup/cancel, lost capture, tab hidden, unmount) restore rate 1 and clean up.
  * This checkpoint scratches AUDIO only; the visual marquee is intentionally left on
  * its idle scroll (visual↔audio sync would require driving the Monogram loop).
+ *
+ * Two desktop refinements ride on this same zone:
+ *  • Custom scratch cursor (Figma `scratch-icon`, 48×48, centred hotspot) over the
+ *    scratchable band — but SUPPRESSED over the monogram silhouette, which owns the
+ *    cursor-trail affordance (Monogram publishes the silhouette-hit via monogramHover).
+ *  • A first-time "[ DRAG TO SCRATCH ]" helper (Figma 246:1536), mirroring the
+ *    [SCROLL TO GENERATE HEAT] cue: shown until the first marquee pointer interaction,
+ *    then faded out and dismissed PERMANENTLY for the browser (localStorage) so it
+ *    never returns across navigation or future visits.
  */
+
+// The scratch hint is a genuine first-run affordance: once the user has scratched,
+// it must never return for this browser. So (unlike the session-scoped Heat cue)
+// dismissal persists in localStorage — plus an in-memory flag so a remount / route
+// return within the session never re-shows it with no flash.
+const HINT_KEY = "h2h.scratchHint.dismissed";
+const HINT_FADE_MS = 280; // matches the CSS fade-out
+let hintDismissedInMemory = false;
+
+function readHintDismissed(): boolean {
+  if (hintDismissedInMemory) return true;
+  if (typeof window === "undefined") return false; // SSR: assume not dismissed
+  try {
+    hintDismissedInMemory = window.localStorage.getItem(HINT_KEY) === "1";
+  } catch {
+    /* localStorage blocked → rely on the in-memory flag only */
+  }
+  return hintDismissedInMemory;
+}
+
+function persistHintDismissed(): void {
+  hintDismissedInMemory = true;
+  try {
+    window.localStorage.setItem(HINT_KEY, "1");
+  } catch {
+    /* ignore — the in-memory flag still prevents re-showing this session */
+  }
+}
+
 export default function MarqueeScratch() {
   const pathname = usePathname();
   const isHome = pathname === "/";
   const [enabled, setEnabled] = useState(false);
   const zoneRef = useRef<HTMLDivElement>(null);
+
+  // First-time helper visibility (see notes above). `revealed` flips true only in a
+  // rAF AFTER mount so SSR + first client render both omit it → no hydration flash.
+  const [hintRevealed, setHintRevealed] = useState(false);
+  const [hintFading, setHintFading] = useState(false);
 
   // Desktop + worklet-transport gate (client-only → null on SSR/first render, no
   // hydration flash). The worklet flag can't change without a reload.
@@ -129,8 +176,66 @@ export default function MarqueeScratch() {
     };
   }, [enabled, isHome]);
 
+  // Custom scratch cursor over the band, SUPPRESSED over the monogram silhouette.
+  // Toggled straight on the DOM (not React state) so the per-move hover signal never
+  // triggers a re-render. Monogram is the raycast authority (monogramHover bridge).
+  useEffect(() => {
+    if (!enabled || !isHome) return;
+    const el = zoneRef.current;
+    if (!el) return;
+    const apply = (hovered: boolean) =>
+      el.classList.toggle(styles.overMonogram, hovered);
+    apply(isMonogramHovered());
+    const unsubscribe = subscribeMonogramHover(apply);
+    return () => {
+      unsubscribe();
+      el.classList.remove(styles.overMonogram);
+    };
+  }, [enabled, isHome]);
+
+  // Reveal the first-time helper (once per browser). rAF-after-mount avoids the SSR
+  // flash; `readHintDismissed()` keeps it hidden the moment it has been consumed.
+  useEffect(() => {
+    if (!enabled || !isHome || readHintDismissed()) return;
+    const raf = requestAnimationFrame(() => setHintRevealed(true));
+    return () => cancelAnimationFrame(raf);
+  }, [enabled, isHome]);
+
+  // First marquee pointer interaction dismisses the helper: fade out, then persist so
+  // it never returns (this browser) across navigation or future visits.
+  useEffect(() => {
+    if (!enabled || !isHome || readHintDismissed()) return;
+    const el = zoneRef.current;
+    if (!el) return;
+    let done = false;
+    const dismiss = () => {
+      if (done) return;
+      done = true;
+      setHintFading(true);
+      window.setTimeout(() => {
+        persistHintDismissed();
+        setHintRevealed(false);
+      }, HINT_FADE_MS);
+    };
+    el.addEventListener("pointerdown", dismiss, { passive: true });
+    return () => el.removeEventListener("pointerdown", dismiss);
+  }, [enabled, isHome]);
+
   if (!enabled || !isHome) return null;
-  // Drag hit-area only — the visible label was removed (an icon will come later);
-  // the zone, its size/position and all pointer behaviour are unchanged.
-  return <div ref={zoneRef} className={styles.zone} aria-hidden="true" />;
+  const showHint = hintRevealed && !readHintDismissed();
+  // Drag hit-area (`zone`) — carries the scratch cursor; the helper label sits above
+  // it at the 64px viewport margin and never intercepts pointer events.
+  return (
+    <>
+      <div ref={zoneRef} className={styles.zone} aria-hidden="true" />
+      {showHint && (
+        <p
+          className={`${styles.hint} ${hintFading ? styles.hintFading : ""}`}
+          aria-hidden="true"
+        >
+          [ DRAG TO SCRATCH ]
+        </p>
+      )}
+    </>
+  );
 }
