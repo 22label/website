@@ -35,17 +35,17 @@
 
 /* First-time desktop helper — Figma node 246:1536 "[ DRAG TO SCRATCH ]".
    Clash Display Regular 18px / 1.98px tracking / solid white, single line, positioned
-   above the marquee band at the 64px viewport-left margin. Non-interactive; above the
+   the marquee glyphs at the 64px viewport-left margin. Non-interactive; above the
    WebGL scene (z 0), below the corner UI; fades out on the first marquee interaction.
-   The visual marquee band is centred at 50% and is 406px × min(1, vw/1728) tall
-   (Monogram: bandTop = (height − uBandH)/2, uBandH = MARQUEE_BAND_H·marqueeScale), so
-   its half-height maxes out at 203px. Anchoring the label 203px + a 40px gap above
-   centre clears the marquee text at every desktop width (narrower widths shrink the
-   band → only more clearance). */
+   The marquee text is drawn textBaseline:middle centred at 50% (Monogram
+   buildMarqueeTexture), font 330px → caps (~0.7×) reach ~115px above centre at full
+   scale (vw ≥ 1728). Anchoring the label's bottom ~32px above the cap tops → label
+   top ≈ 50% − (115 + 32 + line-box). Kept ≤ 32px from the glyph tops per design;
+   narrower widths shrink the text → only more clearance. */
 .hint {
   position: fixed;
   left: 64px;
-  top: calc(50% - 203px - 40px);
+  top: calc(50% - 172px);
   z-index: 5;
   margin: 0;
   padding: 0;
