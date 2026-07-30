@@ -21,8 +21,8 @@
  *   4. Quantise to Uint8 and write a flat binary + a small JSON metadata file.
  *
  * OUTPUT:
- *   /public/audio/intruder-spectrum.bin        (frames x FRAME_STRIDE bytes)
- *   /public/audio/intruder-spectrum-meta.json  (fps, bands, layout, ...)
+ *   /public/audio/backtothefuture-spectrum.bin        (frames x FRAME_STRIDE bytes)
+ *   /public/audio/backtothefuture-spectrum-meta.json  (fps, bands, layout, ...)
  *
  * RUN:  node scripts/generate-audio-analysis.mjs
  */
@@ -34,9 +34,9 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const INPUT = join(ROOT, "public/audio/intruder-snippet.mp3");
-const OUT_BIN = join(ROOT, "public/audio/intruder-spectrum.bin");
-const OUT_META = join(ROOT, "public/audio/intruder-spectrum-meta.json");
+const INPUT = join(ROOT, "public/audio/backtothefuture.mp3");
+const OUT_BIN = join(ROOT, "public/audio/backtothefuture-spectrum.bin");
+const OUT_META = join(ROOT, "public/audio/backtothefuture-spectrum-meta.json");
 
 // ----------------------------------------------------------------- parameters
 const ANALYSIS_FPS = 30; // visual sample rate (~30 samples/sec)
@@ -259,7 +259,7 @@ function main() {
   writeFileSync(OUT_BIN, out);
   const meta = {
     version: 1,
-    source: "public/audio/intruder-snippet.mp3",
+    source: "public/audio/backtothefuture.mp3",
     analysisFps: ANALYSIS_FPS,
     bandCount: BAND_COUNT,
     frameStride: FRAME_STRIDE,

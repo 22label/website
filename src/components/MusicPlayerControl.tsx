@@ -14,7 +14,7 @@ import styles from "./MusicPlayer.module.css";
  * full line (151px desktop / 113px mobile). The line is a graphic, not a
  * progress bar. PLAY and the title crossfade in the same slot (no overlap).
  */
-const TITLE = "MARCOS BAIANO - INTRUDER (ORIGINAL MIX)";
+const TITLE = "MARCOS BAIANO — BACK TO THE FUTURE";
 
 export default function MusicPlayerControl({
   variant,
