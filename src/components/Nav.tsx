@@ -111,7 +111,7 @@ export default function Nav() {
         </li>
         <li>
           <a
-            href="https://www.instagram.com/2h2h_records"
+            href="https://www.instagram.com/2h2h_studio/"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="2H2H on Instagram"
