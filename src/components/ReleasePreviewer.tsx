@@ -132,7 +132,7 @@ export default function ReleasePreviewer() {
         <div className={styles.releaseTop}>
           <span className={styles.divider} aria-hidden="true" />
           <div className={styles.releaseCopy}>
-            <span className={styles.comingSoon}>COMING SOON</span>
+            <span className={styles.comingSoon}>16 OCT 2026</span>
             {/* Present in the DOM at rest, revealed on hover with no layout jump */}
             <div className={styles.releaseDetails}>
               <div className={styles.releaseDetailsInner}>

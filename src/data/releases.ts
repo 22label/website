@@ -20,7 +20,7 @@ export const releases: Release[] = [
     cover: "/assets/images/release-cover.png",
     coverAlt:
       "2H2H001 — Marcos Baiano, Back to the Future EP (+ Terence :Terry: remix) cover artwork",
-    soundcloud: "https://soundcloud.com/2h2h_music",
+    soundcloud: "https://soundcloud.com/2h2h_music/sets/back-to-the-future-2h2h001",
   },
 ];
 

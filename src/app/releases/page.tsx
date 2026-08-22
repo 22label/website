@@ -18,7 +18,7 @@ export default function ReleasesPage() {
             <div className={styles.cardHeader}>
               <span className={styles.divider} aria-hidden="true" />
               <div className={styles.copy}>
-                <span className={styles.comingSoon}>COMING SOON</span>
+                <span className={styles.comingSoon}>16 OCT 2026</span>
                 <span className={styles.value}>{r.catalog}</span>
                 {r.lines.map((line) => (
                   <span key={line} className={styles.value}>
