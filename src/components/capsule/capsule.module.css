@@ -1,0 +1,261 @@
+/* ============================================================
+   CAPSULE 22 — MENS hub. Self-contained, music-free page.
+   Reference viewport 1728 × 972. Background #FFFAF6.
+   Inherits the Clash Display family + 1.76px UI tracking from body.
+   ============================================================ */
+
+.page {
+  position: fixed;
+  inset: 0;
+  min-height: 100svh;
+  overflow-y: auto;
+  background: #fffaf6;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- TOP BAR : logo | title+gender | cart ---------- */
+.topBar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 24px;
+  padding: 64px 64px 0;
+}
+
+.logoLink {
+  display: inline-flex;
+  flex-direction: column;
+  width: fit-content;
+  color: #4d4c4c;
+  -webkit-tap-highlight-color: transparent;
+}
+.logoLink:focus-visible {
+  outline: 2px solid #4d4c4c;
+  outline-offset: 4px;
+  border-radius: 1px;
+}
+/* Recolour the shared 2H2H logo to #4D4C4C for THIS page only, via a mask —
+   the original /assets/svg/logo.svg is never modified. */
+.logo {
+  display: block;
+  width: 274px;
+  height: 24px;
+  background-color: #4d4c4c;
+  -webkit-mask: url("/assets/svg/logo.svg") no-repeat center / contain;
+  mask: url("/assets/svg/logo.svg") no-repeat center / contain;
+}
+.est {
+  margin-top: 16px;
+  color: #4d4c4c;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+}
+
+.titleBlock {
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+.collectionTitle {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+  white-space: nowrap;
+}
+.gender {
+  display: flex;
+  gap: 8px;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+}
+.genderActive {
+  color: #000;
+}
+.genderInactive {
+  color: #919191;
+  cursor: default;
+}
+
+.cart {
+  justify-self: end;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+}
+
+/* ---------- COLLECTION : three cards, centred ---------- */
+.collection {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 64px;
+  outline: none;
+}
+.row {
+  display: flex;
+  gap: 32px;
+  width: min(1345px, 100%);
+  justify-content: center;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  max-width: 427px;
+}
+
+.imageWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 427 / 570;
+  overflow: hidden;
+  background: #ededed;
+}
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* Elegant opacity crossfade for both colour swap + hover front/back. */
+  transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.info {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.infoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.productTitle,
+.price {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+}
+
+/* ---------- colour selectors ---------- */
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+}
+.swatch[data-bordered] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+.swatch[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px #fffaf6, 0 0 0 3px #000;
+}
+.swatch:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+
+/* ---------- ADD ---------- */
+.add {
+  font-size: 12px;
+  letter-spacing: 1.32px;
+  color: #fff;
+  background: #000;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+.add:hover {
+  opacity: 0.85;
+}
+.add:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+
+/* ---------- BOTTOM : product-category menu ---------- */
+.categoryBar {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 64px;
+  padding: 24px 64px 40px;
+}
+.categoryItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+}
+.categoryActive {
+  color: #000;
+}
+.categoryInactive {
+  color: #919191;
+  cursor: default;
+}
+.comingSoon {
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  color: #919191;
+  background: #eeeeee;
+  padding: 4px 8px;
+}
+
+/* ---------- responsive fallbacks (desktop-first design) ---------- */
+@media (max-width: 1024px) {
+  .topBar {
+    padding: 32px 32px 0;
+    gap: 16px;
+  }
+  .collection {
+    padding: 16px 32px;
+  }
+  .categoryBar {
+    gap: 40px;
+    padding: 16px 32px 32px;
+  }
+}
+@media (max-width: 760px) {
+  .topBar {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    row-gap: 20px;
+  }
+  .titleBlock {
+    justify-self: start;
+    align-items: flex-start;
+  }
+  .cart {
+    justify-self: start;
+  }
+  .row {
+    flex-wrap: wrap;
+  }
+  .card {
+    flex-basis: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+  }
+}

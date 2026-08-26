@@ -1,3 +1,7 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+import { isCapsuleRoute } from "@/effects/capsuleRoute";
 import Nav from "@/components/Nav";
 import MobileNav from "@/components/MobileNav";
 import ReleasePreviewer from "@/components/ReleasePreviewer";
@@ -17,6 +21,16 @@ import styles from "./Shell.module.css";
  * previewer). Page content is rendered as {children} behind the corners.
  */
 export default function Shell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+
+  // The CAPSULE fashion hub is an isolated, music-free environment: it opts out of
+  // the entire shared shell (WebGL scene, marquee, heat cue, nav/logo corners,
+  // desktop rail, release previewer, mobile chrome). It renders its own self-
+  // contained page instead — no persistent scene or canvas can leak into it.
+  if (isCapsuleRoute(pathname)) {
+    return <>{children}</>;
+  }
+
   return (
     <div className={styles.viewport}>
       {/* Persistent WebGL scene (desktop: mounted across routes; mobile: Home

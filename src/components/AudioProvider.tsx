@@ -7,13 +7,16 @@ import {
   useEffect,
   useState,
 } from "react";
+import { usePathname } from "next/navigation";
 import {
   ensureAudio,
   prefetchAudio,
+  setPlaybackSuppressed,
   subscribePlaying,
   togglePlayback,
   userGesture,
 } from "@/effects/audioReactive";
+import { isCapsuleRoute } from "@/effects/capsuleRoute";
 
 /**
  * Global, persistent audio for the whole site. The playback engine lives in the
@@ -44,10 +47,29 @@ export default function AudioProvider({
   children: React.ReactNode;
 }) {
   const [playing, setPlayingState] = useState(false);
+  const pathname = usePathname();
+  const musicFree = isCapsuleRoute(pathname);
 
   useEffect(() => {
-    // Mirror the engine's real play state (never a fake ON).
+    // Mirror the engine's real play state (never a fake ON). Route-independent.
     const unsub = subscribePlaying(setPlayingState);
+    return unsub;
+  }, []);
+
+  // Audio initialization is OWNED here and keyed on the route's music policy, so a
+  // music-free route (the /capsule hub) can never initialize or sound audio — the
+  // guarantee does not depend on effect ordering vs. a deeper page effect.
+  useEffect(() => {
+    if (musicFree) {
+      // Enter a music-free route: pause the desired state (so leaving never
+      // auto-resumes) and DON'T build the context, run autoplay, or attach the
+      // unlock listeners. No AudioContext is ever created on a direct load here.
+      setPlaybackSuppressed(true);
+      return;
+    }
+    // Music route: clear any lockout (unlock only — never resumes on its own),
+    // then run the normal init exactly as before.
+    setPlaybackSuppressed(false);
 
     // Prefetch the MP3 bytes now, but DON'T create the AudioContext yet — iOS
     // Safari can permanently mute a context built outside a user gesture. The
@@ -73,12 +95,11 @@ export default function AudioProvider({
     window.addEventListener("touchstart", onFirstGesture, { passive: true });
 
     return () => {
-      unsub();
       window.removeEventListener("pointerdown", onFirstGesture);
       window.removeEventListener("keydown", onFirstGesture);
       window.removeEventListener("touchstart", onFirstGesture);
     };
-  }, []);
+  }, [musicFree]);
 
   const toggle = useCallback(() => {
     togglePlayback(); // unlocks the context in-gesture, then flips play/pause

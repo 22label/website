@@ -22,6 +22,7 @@
  */
 import { EFFECTS, HEATMAP, PULSE, telemetry } from "./effectsConfig";
 import { heatTarget } from "./heatTarget.mjs";
+import { shouldSound, suppress, unsuppress } from "./playbackGate.mjs";
 
 const AUDIO_URL = "/audio/backtothefuture.mp3";
 const SPECTRUM_BIN_URL = "/audio/backtothefuture-spectrum.bin";
@@ -145,6 +146,12 @@ let resumeOffset = 0; // musical offset (s) to (re)start from
 let srcStartCtxTime = 0; // ctx.currentTime when the current source started
 let srcStartOffset = 0; // offset the current source started at
 let wantPlay = false; // the app's desired state (should audio be playing?)
+// Route-level playback lockout (the music-free /capsule hub). The enter/leave
+// transition logic lives in playbackGate.mjs; this is just the mirrored module
+// state. While true, reconcile() forces the transport silent. Set via
+// setPlaybackSuppressed() — enter pauses the desired state so leaving never
+// auto-resumes; no duplicate nodes, no provider recreation.
+let playbackSuppressed = false;
 let autoplayOnce = true; // one-shot autoplay attempt at load (after decode)
 let unlocked = false; // iOS Web Audio unlocked (silent buffer played in a gesture)
 
@@ -847,14 +854,40 @@ function unlock(): void {
 /** Bring actual playback in line with the desired state `wantPlay` (LIVE). */
 function reconcile(): void {
   if (!graph || !graph.buffer) return;
+  // Suppressed route always wins → silence, regardless of wantPlay.
+  const want = shouldSound({ wantPlay, suppressed: playbackSuppressed });
   if (transport() === "worklet") {
     if (!workletReady) return; // setup pending → afterReady() will reconcile again
-    if (wantPlay && !workletPlaying) startWorklet();
-    else if (!wantPlay && workletPlaying) stopWorklet();
+    if (want && !workletPlaying) startWorklet();
+    else if (!want && workletPlaying) stopWorklet();
     return;
   }
-  if (wantPlay && !graph.source) startSource(resumeOffset);
-  else if (!wantPlay && graph.source) stopSource();
+  if (want && !graph.source) startSource(resumeOffset);
+  else if (!want && graph.source) stopSource();
+}
+
+/**
+ * Route-level playback lockout for music-free pages (the /capsule hub). Delegates
+ * the state transition to the pure playbackGate policy, then applies the matching
+ * side effect on the active transport:
+ *   • ENTER — LIVE (worklet + source) stop through the normal reconcile() path;
+ *     PRECOMPUTED_MOBILE pauses its media element. The one-shot autoplay is
+ *     cancelled so a fresh load that lands on the route never sounds.
+ *   • LEAVE — unlock only. wantPlay is forced back to paused, so reconcile() keeps
+ *     LIVE stopped and the media element is left paused: NO automatic resume. The
+ *     user re-enables audio with the normal playback control.
+ */
+export function setPlaybackSuppressed(on: boolean): void {
+  const cur = { wantPlay, autoplayOnce, suppressed: playbackSuppressed };
+  const next = on ? suppress() : unsuppress(cur);
+  wantPlay = next.wantPlay;
+  autoplayOnce = next.autoplayOnce;
+  playbackSuppressed = next.suppressed;
+  if (audioMode() === "PRECOMPUTED_MOBILE") {
+    if (on) mediaEl?.pause(); // leave: nothing to do — element stays paused
+    return;
+  }
+  reconcile(); // enter → stops LIVE; leave → want=false, so it stays stopped
 }
 
 // ============================================================================
