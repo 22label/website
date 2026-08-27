@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
-import CapsuleHub from "@/components/capsule/CapsuleHub";
+import CapsuleLanding from "@/components/capsule/CapsuleLanding";
 
 export const metadata: Metadata = {
-  title: "CAPSULE 22 — MENS · 2HOT2HANDLE",
-  description:
-    "CAPSULE - 22 ORIGINS — the 2HOT2HANDLE MENS capsule collection.",
+  title: "CAPSULE 22 · 2HOT2HANDLE",
+  description: "CAPSULE - 22 ORIGINS — enter the 2HOT2HANDLE MENS or WOMENS capsule.",
 };
 
 /**
- * /capsule — the CAPSULE 22 MENS hub. Rendered outside the shared music/WebGL
- * shell (Shell.tsx returns children bare for this route) and with audio locked at
- * the AudioProvider level, so this is a fully isolated fashion environment.
+ * /capsule — the CAPSULE landing hub: two big image links (MENS / WOMENS) with a
+ * central marquee. Rendered outside the shared music/WebGL shell and with audio
+ * locked (isCapsuleRoute). The old direct-to-MENS behaviour now lives at
+ * /capsule/mens.
  */
 export default function CapsulePage() {
-  return <CapsuleHub />;
+  return <CapsuleLanding />;
 }

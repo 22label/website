@@ -1,21 +1,24 @@
 /* ============================================================
-   CAPSULE 22 — MENS hub. Self-contained, music-free page.
-   Reference viewport 1728 × 972. Background #FFFAF6.
+   CAPSULE 22 — MENS/WOMENS hub. Self-contained, music-free page.
+   Reference viewport 1728 × 972. Background #FFFDFC.
    Inherits the Clash Display family + 1.76px UI tracking from body.
+   Shared motion tokens (--dur/--ease) drive every gentle transition.
    ============================================================ */
 
 .page {
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 260ms;
   position: fixed;
   inset: 0;
   min-height: 100svh;
   overflow-y: auto;
-  background: #fffaf6;
+  background: #fffdfc;
   color: #000;
   display: flex;
   flex-direction: column;
 }
 
-/* ---------- TOP BAR : logo | title+gender | cart ---------- */
+/* ---------- TOP BAR : logo | two-row menu | cart ---------- */
 .topBar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -53,31 +56,50 @@
   letter-spacing: 1.76px;
 }
 
-.titleBlock {
+/* ---------- central menu : two rows, no title ---------- */
+.menu {
   justify-self: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
+  gap: 16px; /* vertical gap between the two rows (Figma 275-599) */
 }
-.collectionTitle {
-  font-size: 16px;
-  letter-spacing: 1.76px;
-  color: #000;
-  white-space: nowrap;
-}
-.gender {
+.menuRow {
   display: flex;
-  gap: 8px;
+  gap: 8px; /* MENS · WOMENS */
+}
+.menuRowCategory {
+  display: flex;
+  gap: 32px; /* TEE · HOODIE · CAP (Figma 278-1019) */
+}
+/* Every menu entry is a real button — reset chrome, keep the type + gentle motion. */
+.navActive,
+.navInactive {
+  font: inherit;
   font-size: 16px;
   letter-spacing: 1.76px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease);
 }
-.genderActive {
+.navActive {
   color: #000;
 }
-.genderInactive {
+.navInactive {
   color: #919191;
+}
+.navInactive:not(:disabled):hover {
+  color: #4d4c4c;
+}
+.navInactive:disabled {
   cursor: default;
+}
+.navActive:focus-visible,
+.navInactive:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
 }
 
 .cart {
@@ -85,15 +107,39 @@
   font-size: 16px;
   letter-spacing: 1.76px;
   color: #000;
+  transition: opacity var(--dur) var(--ease);
+}
+/* When the drawer is open, CLOSE takes this slot — hide the trigger (kept in the
+   DOM + focusable so focus can return to it on close). */
+.cart[data-hidden] {
+  opacity: 0;
+  pointer-events: none;
+}
+.cartButton {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease);
+}
+.cartButton:hover {
+  opacity: 0.6;
+}
+.cartButton:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
 }
 
-/* ---------- COLLECTION : three cards, centred ---------- */
+/* ---------- COLLECTION : cards, centred ---------- */
 .collection {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start; /* grid top-anchored (Figma products at y188) */
   justify-content: center;
-  padding: 24px 64px;
+  padding: 64px 64px 0; /* header (~124) + 64 → grid starts ~188 */
   outline: none;
 }
 .row {
@@ -101,6 +147,21 @@
   gap: 32px;
   width: min(1345px, 100%);
   justify-content: center;
+  /* Shared MENS + WOMENS grid rule: 128px below the collection (Figma 263-525).
+     No old bottom-menu spacing remains — the category bar was fully removed. */
+  margin-bottom: 128px;
+  /* key={gender-category} replays this gentle fade on every switch. */
+  animation: capsuleFade 320ms var(--ease) both;
+}
+@keyframes capsuleFade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .card {
@@ -111,11 +172,18 @@
 }
 
 .imageWrap {
+  display: block;
   position: relative;
   width: 100%;
   aspect-ratio: 427 / 570;
   overflow: hidden;
   background: #ededed;
+  text-decoration: none;
+  color: inherit;
+}
+.imageWrap:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
 }
 .layer {
   position: absolute;
@@ -126,19 +194,29 @@
   user-select: none;
   -webkit-user-drag: none;
   /* Elegant opacity crossfade for both colour swap + hover front/back. */
-  transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 240ms var(--ease);
 }
 
+/* ---------- product info block (Figma 266-568) ---------- */
 .info {
+  position: relative; /* anchors the absolute SELECT A SIZE prompt */
   margin-top: 16px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 16px; /* exact vertical gap between the two rows */
 }
 .infoRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+/* Hub summary: title container spans the full card/image width and centres — no
+   space-between with a hidden price, no manual offsets. */
+.summaryTitle {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  text-align: center;
 }
 .productTitle,
 .price {
@@ -147,34 +225,84 @@
   color: #000;
 }
 
-/* ---------- colour selectors ---------- */
+/* ---------- colour selectors (24 × 24) ---------- */
 .swatches {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .swatch {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   border-radius: 50%;
   background: var(--swatch);
   cursor: pointer;
+  transition: box-shadow var(--dur) var(--ease);
 }
 .swatch[data-bordered] {
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 .swatch[aria-pressed="true"] {
-  box-shadow: 0 0 0 2px #fffaf6, 0 0 0 3px #000;
+  box-shadow: 0 0 0 2px #fffdfc, 0 0 0 3px #000;
 }
 .swatch:focus-visible {
   outline: 2px solid #000;
   outline-offset: 3px;
 }
 
+/* ---------- size selector + ADD (right cluster) ----------
+   Figma 278-640: sizes group + ADD, right-aligned, 24px gap; size buttons 32 × 24,
+   gap 5px; every control shares a 24px height. Letters centred with grid + a
+   text-indent that cancels the trailing letter-spacing (no asymmetric padding). */
+.buys {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.sizes {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.size {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #e6e6e6;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease);
+}
+.sizeLabel {
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 1.32px;
+  text-indent: 0.66px; /* half the tracking → optically centres S/M/L/XL */
+  color: #000;
+}
+.size:hover {
+  border-color: #9a9a9a;
+}
+.size[aria-pressed="true"] {
+  border-color: #000;
+}
+.size:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
 /* ---------- ADD ---------- */
 .add {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
   font-size: 12px;
   letter-spacing: 1.32px;
   color: #fff;
@@ -182,7 +310,7 @@
   border: none;
   padding: 4px 8px;
   cursor: pointer;
-  transition: opacity 160ms ease;
+  transition: opacity var(--dur) var(--ease);
 }
 .add:hover {
   opacity: 0.85;
@@ -192,70 +320,979 @@
   outline-offset: 3px;
 }
 
-/* ---------- BOTTOM : product-category menu ---------- */
-.categoryBar {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 64px;
-  padding: 24px 64px 40px;
+/* SELECT A SIZE — right-aligned prompt (Figma 279-2704, #cd0000).
+   Absolutely positioned → reserves no flow space, so it can NEVER shift the grid.
+   visibility:hidden keeps it out of the a11y tree until actually shown. */
+.sizeHint {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin: 6px 0 0;
+  font-size: 12px;
+  letter-spacing: 1.32px;
+  color: #cd0000;
+  white-space: nowrap;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease), visibility 0s linear var(--dur);
 }
-.categoryItem {
+.sizeHint[data-show] {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity var(--dur) var(--ease), visibility 0s;
+}
+
+/* ============================================================
+   CART DRAWER (Figma 278-667 / 278-913)
+   Panel: 628px, right-anchored, 80% white fill + background blur across the
+   WHOLE panel (incl. the 64px side gutters). The inner content container keeps a
+   fixed 64px inset on both sides via padding-inline on the panel, so the table,
+   CLOSE, header, total and CTA all share the same horizontal boundaries and the
+   usable content width is (drawer width − 128px). Only the panel is translucent —
+   content stays 100% opaque.
+   ============================================================ */
+.drawerRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none; /* closed: never intercept clicks on the page beneath */
+}
+.drawerBackdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent; /* no dark scrim in the design */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 360ms var(--ease);
+}
+.drawerRoot[data-open] .drawerBackdrop {
+  opacity: 1;
+  pointer-events: auto;
+}
+.drawerPanel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(628px, 100%);
+  box-sizing: border-box;
+  /* Fixed 64px inner gutters on BOTH sides — the structural boundary shared by
+     CLOSE, the table and the CTA. The translucent fill + blur cover the whole
+     panel, gutters included. */
+  padding-inline: 64px;
+  background: rgba(255, 255, 255, 0.8);
+  -webkit-backdrop-filter: blur(30px) saturate(115%);
+  backdrop-filter: blur(30px) saturate(115%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  justify-content: center;
+  transform: translateX(100%);
+  pointer-events: none;
+  transition: transform 360ms var(--ease);
+  will-change: transform;
+  outline: none;
+}
+.drawerRoot[data-open] .drawerPanel {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* CLOSE — text button, top-right of the panel (Figma 278-1010/1011). */
+.drawerClose {
+  position: absolute;
+  top: 64px;
+  right: 64px;
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease);
+}
+.drawerClose:hover {
+  opacity: 0.6;
+}
+.drawerClose:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+
+.drawerContent {
+  box-sizing: border-box;
+  /* Fills the panel's content box → usable width = drawer width − 128px. */
+  width: 100%;
+  height: min(570px, calc(100% - 128px));
+  display: flex;
+  flex-direction: column;
+  color: #000;
+}
+.drawerHeading {
+  margin: 0 0 64px;
   font-size: 16px;
   letter-spacing: 1.76px;
 }
-.categoryActive {
-  color: #000;
+.drawerCount {
+  font-weight: 600; /* Clash Display Semibold */
 }
-.categoryInactive {
-  color: #919191;
-  cursor: default;
-}
-.comingSoon {
-  font-size: 10px;
-  letter-spacing: 1.1px;
-  color: #919191;
-  background: #eeeeee;
-  padding: 4px 8px;
+.drawerEmpty {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #4d4c4c;
 }
 
-/* ---------- responsive fallbacks (desktop-first design) ---------- */
+/* scroll region: table + shipping + total, PRE ORDER pinned below */
+.drawerScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.cartTable {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cartHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 40px; /* aligns "Item" over the product name (24px X + 16px gap) */
+  color: #9e9e9e;
+  font-size: 12px;
+}
+.cartHeadItem {
+  flex: 1 1 auto;
+}
+.cartHeadRight {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex: 0 0 auto;
+}
+.cartHeadQty {
+  width: 24px;
+  text-align: center;
+}
+.cartHeadPrice {
+  min-width: 48px;
+  text-align: right;
+}
+
+.cartItems {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cartRow,
+.drawerMetaRow {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cartRowInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+.cartItemCol {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.cartName {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  font-weight: 500; /* Clash Display Medium */
+  white-space: nowrap;
+}
+.cartAttr {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  white-space: nowrap;
+}
+.cartRight {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex: 0 0 auto;
+}
+.cartPrice {
+  min-width: 48px;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* remove X — real button, exact Figma glyph, gentle recolour */
+.removeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #9e9e9e;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color var(--dur) var(--ease);
+}
+.removeBtn:hover {
+  color: #000;
+}
+.removeBtn:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+.removeGlyph {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+/* quantity field — 24 × 24, #ebebeb border, centred digit, no browser spinner */
+.qtyInput {
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #ebebeb;
+  background: transparent;
+  color: #000;
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  text-align: center;
+  text-indent: 0.88px; /* cancels trailing tracking → centred digit */
+  -moz-appearance: textfield;
+  appearance: textfield;
+  transition: border-color var(--dur) var(--ease);
+}
+.qtyInput::-webkit-outer-spin-button,
+.qtyInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.qtyInput:hover {
+  border-color: #9a9a9a;
+}
+.qtyInput:focus,
+.qtyInput:focus-visible {
+  outline: none;
+  border-color: #000;
+}
+
+.drawerShipLabel {
+  font-size: 16px;
+}
+.drawerTotalLabel {
+  font-size: 16px;
+  font-weight: 600;
+}
+.drawerTotalValue {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  font-weight: 600;
+}
+.drawerRule {
+  display: block;
+  width: 100%;
+  height: 0;
+  border-top: 1px solid #e6e6e6;
+}
+
+.drawerFoot {
+  margin-top: auto;
+  padding-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+}
+.preorder {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 167px;
+  height: 56px;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 1000px;
+  background: #000;
+  color: #fff;
+  font-size: 14px;
+  letter-spacing: 1.54px;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease);
+}
+.preorder:hover:not(:disabled) {
+  opacity: 0.85;
+}
+.preorder:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.preorder:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+
+/* ---------- lock the page scroll while the drawer is open ---------- */
+.page[data-drawer-open] {
+  overflow: hidden;
+}
+
+/* ============================================================
+   HUB TEXT CURSOR ("[OPEN]", Figma 282-785)
+   Follows the pointer over product-image links; fine-pointer only,
+   driven imperatively (no per-move re-render), centred on the pointer.
+   ============================================================ */
+.cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 900; /* above content, below the drawer (1000) */
+  pointer-events: none;
+  opacity: 0;
+  font-size: 12px;
+  letter-spacing: 1.32px;
+  color: #000;
+  white-space: nowrap;
+  will-change: transform, opacity;
+}
+
+/* ============================================================
+   SINGLE PRODUCT PAGE (Figma 266-586 / 266-672 / 282-780)
+   Left: fixed info container 64px from the left, vertically centred.
+   Right: carousel viewport that clips its track at its own left edge.
+   ============================================================ */
+.productMain {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.productInfo {
+  /* Fixed to the viewport so it is vertically centred against the FULL height
+     (not just the area below the header), matching Figma. */
+  position: fixed;
+  left: 64px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 427px;
+  height: 570px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #000;
+}
+.productInfoTop {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.productTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.productHeading {
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  font-weight: 600; /* Clash Display Semibold */
+}
+/* Price sits in the title row on MOBILE only (desktop shows it in the CTA row). */
+.productTitlePrice {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+  display: none;
+}
+
+/* Breadcrumb has two placements: inside the info column on desktop ("HOME"),
+   standalone above the gallery on mobile ("TEE"). One is display:none per
+   breakpoint, so only one is ever announced. */
+.crumbInInfo {
+  width: 100%;
+}
+.crumbStandalone {
+  display: none;
+}
+
+/* breadcrumb (Figma 266-618): "‹ HOME / <product>", 12px #8b8b8b tracking 1.32.
+   HOME is a real link back to the correct hub; the product is aria-current. */
+.breadcrumb {
+  width: 100%;
+}
+.breadcrumbList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  letter-spacing: 1.32px;
+  color: #8b8b8b;
+}
+.breadcrumbItem {
+  display: inline-flex;
+  align-items: center;
+}
+.breadcrumbItem + .breadcrumbItem::before {
+  content: "/";
+  margin: 0 6px;
+  color: #8b8b8b;
+}
+.breadcrumbLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #8b8b8b;
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
+}
+.breadcrumbLink:hover {
+  color: #4d4c4c;
+}
+.breadcrumbLink:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+.breadcrumbCurrent {
+  color: #8b8b8b;
+}
+.crumbChevron {
+  display: block;
+  width: 5px;
+  height: 9px;
+  flex: 0 0 auto;
+}
+
+/* product-page colour selector: 20 × 20 (Figma 269-687) */
+.swatches20 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.swatch20 {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--swatch);
+  cursor: pointer;
+  transition: box-shadow var(--dur) var(--ease);
+}
+.swatch20[data-bordered] {
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.swatch20[aria-pressed="true"] {
+  box-shadow: 0 0 0 2px #fffdfc, 0 0 0 3px #000;
+}
+.swatch20:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+
+/* DESCRIPTION / COMPOSITION accordions (Figma 285-1503 / 285-1541).
+   NOTE: Figma specifies Satoshi Regular for the body copy, but the project only
+   ships Clash Display, so the list reuses the site body font at the designed 14px. */
+.desc {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 427px;
+  max-width: 100%;
+}
+.accordion {
+  display: flex;
+  flex-direction: column;
+}
+.accHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #000;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  font-weight: 500; /* Clash Display Medium */
+  text-align: left;
+  transition: opacity var(--dur) var(--ease);
+}
+.accHeader:hover {
+  opacity: 0.7;
+}
+.accHeader:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+.accSymbol {
+  display: inline-block;
+  width: 10px;
+  text-align: center;
+}
+/* Height animation via grid-template-rows (no hardcoded height, no display:none). */
+.accPanel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur) var(--ease);
+}
+.accPanel[data-open] {
+  grid-template-rows: 1fr;
+}
+.accPanelInner {
+  overflow: hidden;
+  min-height: 0;
+}
+.accList {
+  margin: 4px 0 0;
+  padding-left: 21px;
+  list-style: disc;
+}
+.accList li {
+  font-size: 14px;
+  line-height: 1.4;
+  letter-spacing: normal;
+  color: #000;
+}
+
+/* sizing boxes: 40px wide, 42 tall with border (Figma 269-686). Letters centred
+   via grid + a text-indent that cancels the trailing tracking. */
+.sizing {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sizeBox {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 10px;
+  border: 1px solid #e6e6e6;
+  background: transparent;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease);
+}
+.sizeBoxLabel {
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 1.76px;
+  text-indent: 0.88px;
+  color: #000;
+}
+.sizeBox:hover {
+  border-color: #9a9a9a;
+}
+.sizeBox[aria-pressed="true"] {
+  border-color: #000;
+}
+.sizeBox:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 2px;
+}
+
+/* CTA row: PRE ORDER pill (reuses .preorder) + price, right-aligned. */
+.ctaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.ctaPrice {
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+}
+
+/* carousel viewport: real horizontal-scroll mask; clips the track at its left
+   edge so images never reach the info region. */
+.carouselViewport {
+  /* Fixed to the viewport: vertically centred against the full height + clips at
+     its own left edge (619px), the mask that keeps images out of the info region. */
+  position: fixed;
+  left: 619px;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 570px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+}
+.carouselViewport::-webkit-scrollbar {
+  display: none;
+}
+.carouselViewport:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: -2px;
+}
+.carouselTrack {
+  display: flex;
+  gap: 32px;
+  height: 100%;
+  width: max-content;
+}
+.carouselImg {
+  flex: 0 0 auto;
+  width: 427px;
+  height: 570px;
+  object-fit: cover;
+  background: #ededed;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* ---------- reduced motion: keep everything, drop the movement ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .layer,
+  .size,
+  .add,
+  .swatch,
+  .swatch20,
+  .sizeBox,
+  .navActive,
+  .navInactive,
+  .cart,
+  .cartButton,
+  .removeBtn,
+  .qtyInput,
+  .preorder,
+  .drawerClose,
+  .sizeHint,
+  .breadcrumbLink,
+  .accHeader,
+  .accPanel,
+  .marqueeTrack,
+  .landingImg,
+  .drawerPanel,
+  .drawerBackdrop {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* ============================================================
+   LANDING (Figma 285-2079 desktop / 285-1883 mobile)
+   ============================================================ */
+.landingPage {
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur: 260ms;
+  position: fixed;
+  inset: 0;
+  background: #fffdfc;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.landingMain {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex; /* two halves side by side (desktop) */
+}
+.landingSide {
+  flex: 1 1 50%;
+  position: relative;
+  display: block;
+  overflow: hidden;
+  text-decoration: none;
+  min-width: 0;
+}
+.landingImg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Local landing marquee (Figma 286-702) — seamless, decorative, non-interactive. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.marquee {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  overflow: hidden;
+  pointer-events: none; /* never block the image links beneath */
+  z-index: 5;
+}
+.marqueeTrack {
+  display: flex;
+  width: max-content;
+  animation: marqueeScroll 32s linear infinite;
+  will-change: transform;
+}
+.marqueeGroup {
+  display: flex;
+  gap: 32px;
+  padding-right: 32px; /* keeps the seam gap identical to the internal gap */
+}
+.marqueeItem {
+  font-weight: 700; /* Clash Display Bold */
+  font-size: 64px;
+  line-height: 1;
+  letter-spacing: 7.04px;
+  color: #fff;
+  white-space: nowrap;
+}
+@keyframes marqueeScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Header cart trigger: text on desktop, burger on mobile (same button + ref). */
+.cartText {
+  display: inline;
+}
+.cartBurger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 24px;
+  height: 24px;
+}
+.cartBurger span {
+  display: block;
+  height: 2px;
+  width: 100%;
+  background: #000;
+}
+
+/* Mobile sticky bottom menu — hidden by default (desktop). */
+.sticky {
+  display: none;
+}
+
+/* ---------- responsive fallbacks (desktop-first) ---------- */
 @media (max-width: 1024px) {
   .topBar {
     padding: 32px 32px 0;
     gap: 16px;
   }
   .collection {
-    padding: 16px 32px;
-  }
-  .categoryBar {
-    gap: 40px;
-    padding: 16px 32px 32px;
+    padding: 48px 32px 0;
   }
 }
-@media (max-width: 760px) {
+
+/* ============================================================
+   MOBILE (real mobile frames — 285-1883 / 285-791 / 285-1752 / 285-813)
+   Below 860px the layout switches from the desktop reference to the mobile one.
+   ============================================================ */
+@media (max-width: 860px) {
+  /* --- header: logo + burger, no center menu --- */
   .topBar {
-    grid-template-columns: 1fr;
-    justify-items: start;
-    row-gap: 20px;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    padding: max(20px, env(safe-area-inset-top)) 24px 0;
+    gap: 16px;
   }
-  .titleBlock {
-    justify-self: start;
-    align-items: flex-start;
+  .menu {
+    display: none;
   }
-  .cart {
-    justify-self: start;
+  .est {
+    display: none;
+  }
+  .logo {
+    width: 182px;
+    height: 16px;
+  }
+  .cartText {
+    display: none;
+  }
+  .cartBurger {
+    display: flex;
+  }
+
+  /* --- landing: stacked images + marquee between --- */
+  .landingMain {
+    flex-direction: column;
+  }
+  .landingSide {
+    flex: 1 1 50%;
+  }
+
+  /* --- collections: single column + reserve space for the sticky menu --- */
+  .collection {
+    padding: 24px 24px 0;
   }
   .row {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 32px;
+    width: 100%;
+    margin-bottom: 0;
   }
   .card {
-    flex-basis: 100%;
-    max-width: 420px;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 480px;
     margin: 0 auto;
+  }
+  .page[data-has-sticky] .collection {
+    padding-bottom: calc(64px + 24px + env(safe-area-inset-bottom));
+  }
+
+  /* --- sticky bottom menu (Figma 285-1630) --- */
+  .sticky {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    background: #fff;
+    padding: 16px 24px calc(16px + env(safe-area-inset-bottom));
+  }
+  .stickyMW {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mwActive,
+  .mwInactive {
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+    letter-spacing: 1.76px;
+    text-indent: 0.88px;
+    color: #000;
+    text-decoration: none;
+    transition: border-color var(--dur, 260ms) var(--ease, ease);
+  }
+  .mwActive {
+    border: 1px solid #000;
+  }
+  .mwInactive {
+    border: 1px solid #e6e6e6;
+  }
+  .mwActive:focus-visible,
+  .mwInactive:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 2px;
+  }
+  .stickyCats {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 16px;
+    letter-spacing: 1.76px;
+  }
+
+  /* --- drawer: shrink side gutters --- */
+  .drawerPanel {
+    padding-inline: 24px;
+  }
+
+  /* --- single product page: stacked (breadcrumb, gallery, info) --- */
+  .productMain {
+    position: static;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 16px 0 32px;
+  }
+  .crumbInInfo {
+    display: none;
+  }
+  .crumbStandalone {
+    display: block;
+    padding: 0 24px;
+  }
+  .productInfo {
+    position: static;
+    transform: none;
+    width: 100%;
+    height: auto;
+    justify-content: flex-start;
+    gap: 32px;
+    padding: 0 24px;
+  }
+  .productTitlePrice {
+    display: inline;
+  }
+  .ctaPrice {
+    display: none;
+  }
+  .ctaRow {
+    justify-content: stretch;
+  }
+  .preorder {
+    width: 100%;
+  }
+  .desc {
+    width: 100%;
+  }
+
+  /* --- mobile gallery: horizontal swipe, 279×372 images --- */
+  .carouselViewport {
+    position: static;
+    transform: none;
+    left: auto;
+    right: auto;
+    width: 100%;
+    height: auto;
+    padding-left: 24px;
+  }
+  .carouselTrack {
+    gap: 32px;
+    padding-right: 24px;
+  }
+  .carouselImg {
+    width: 279px;
+    height: 372px;
   }
 }
