@@ -1164,18 +1164,6 @@
   height: 32px;
 }
 
-/* Decorative, inert burger for the Coming Soon mobile header — visual parity with
-   the teaser frame, but NOT a button (no menu is designed for the teaser). */
-.burgerStatic {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  color: #000;
-  pointer-events: none;
-}
-
 /* Coming Soon teaser label OVERLAID on the marquee (Figma 289-1054). A STATIC span,
    sibling of .marqueeTrack inside .marquee, centred on the marquee bar and stacked
    above the moving track. It never joins the loop, never inherits the track's
@@ -1284,6 +1272,13 @@
     justify-content: space-between;
     padding: calc(16px + env(safe-area-inset-top)) 24px 16px;
     gap: 16px;
+  }
+  /* Coming Soon header ONLY (Figma 289-1037): 24px on ALL sides. The shop / collection
+     headers keep their 16px vertical rhythm. The safe-area inset is added on top of
+     the 24px (kept separate, never merged), so the Figma visual padding stays 24px;
+     env() is 0 on non-notch viewports → computed padding is exactly 24px on all sides. */
+  .topBar[data-variant="coming-soon"] {
+    padding: calc(24px + env(safe-area-inset-top)) 24px 24px;
   }
   .menu {
     display: none;

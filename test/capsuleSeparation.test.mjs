@@ -33,8 +33,12 @@ test("desktop music nav renders CAPSULE via the shared link → the teaser", () 
   assert.ok(!/target="_blank"[^>]*CAPSULE|CAPSULE[^<]*target="_blank"/.test(nav));
 });
 
-test("mobile music nav renders CAPSULE via the shared link → the teaser", () => {
-  assert.match(mobileNav, /CAPSULE_MUSIC_LINK/);
+test("mobile music nav renders CAPSULE via the shared MobileMenu → the teaser", () => {
+  // The mobile menu items now live in the shared MobileMenu (dark theme here); the
+  // link comes from CAPSULE_MUSIC_LINK there, so MobileNav just mounts the component.
+  assert.match(mobileNav, /<MobileMenu theme="dark" \/>/);
+  const menu = readFileSync(join(root, "src/components/MobileMenu.tsx"), "utf8");
+  assert.match(menu, /CAPSULE_MUSIC_LINK/);
 });
 
 test("NO music nav links directly to the real WIP shop (/capsule or its subroutes)", () => {

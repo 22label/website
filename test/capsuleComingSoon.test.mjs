@@ -50,12 +50,11 @@ test("teaser images are NON-navigable (rendered as a plain div, not a link/butto
   );
 });
 
-test("teaser has NO cart and a decorative (inert) burger; logo → the music home", () => {
+test("teaser has NO cart and opens the shared MENU (light); logo → the music home", () => {
   // comingSoon variant does not mount the cart button (guarded by !comingSoon).
   assert.match(header, /\{!comingSoon && <CapsuleCartButton \/>\}/);
-  // decorative burger is aria-hidden and not a <button>.
-  assert.match(header, /styles\.burgerStatic/);
-  assert.match(header, /aria-hidden="true"[\s\S]*burgerStatic/);
+  // the mobile burger is the shared MobileMenu in its LIGHT theme (not a decorative one).
+  assert.match(header, /<MobileMenu theme="light" \/>/);
   assert.match(header, /const logoHref = comingSoon \? "\/" : "\/capsule"/);
 });
 

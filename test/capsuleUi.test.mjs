@@ -186,8 +186,21 @@ test("landing keeps a 64px gap between the top-left block and the images (deskto
 });
 
 // ---------- Mobile offsets: header + breadcrumb 16px vertical, safe-area added once ----------
-test("mobile header has structural 16px top/bottom padding + additive safe-area", () => {
+test("shop / collection mobile header keeps 16px top/bottom padding + additive safe-area", () => {
   assert.match(css, /padding:\s*calc\(16px \+ env\(safe-area-inset-top\)\)\s*24px\s*16px/);
+});
+
+test("Coming Soon mobile header is 24px on ALL sides (variant-scoped; safe-area separate)", () => {
+  // Figma 289-1037: p-24. Scoped to the teaser only via [data-variant="coming-soon"]
+  // (the shop header stays 16px); the safe-area inset is added on top of the 24px, so
+  // the visual Figma padding stays 24px (computed 24px on non-notch viewports).
+  assert.match(
+    css,
+    /\.topBar\[data-variant="coming-soon"\]\s*\{[^}]*padding:\s*calc\(24px \+ env\(safe-area-inset-top\)\)\s*24px\s*24px/,
+  );
+  // the header element carries the variant marker on the teaser.
+  const header = read("src/components/capsule/CapsuleHeader.tsx");
+  assert.match(header, /data-variant=\{comingSoon \? "coming-soon" : undefined\}/);
 });
 
 test("mobile breadcrumb container has 16px top + 16px bottom padding", () => {

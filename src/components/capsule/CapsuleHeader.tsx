@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { CapsuleGender, CapsuleCategory, CapsuleCategoryTab } from "@/data/capsule";
 import { collectionHref } from "@/data/capsule";
+import MobileMenu from "@/components/MobileMenu";
 import CapsuleCartButton from "./CapsuleCartButton";
 import CapsuleMobileMenu from "./CapsuleMobileMenu";
 import styles from "./capsule.module.css";
@@ -42,7 +43,11 @@ export default function CapsuleHeader({
   ];
 
   return (
-    <header className={styles.topBar} data-no-menu={menu ? undefined : ""}>
+    <header
+      className={styles.topBar}
+      data-no-menu={menu ? undefined : ""}
+      data-variant={comingSoon ? "coming-soon" : undefined}
+    >
       <Link className={styles.logoLink} href={logoHref} aria-label={logoLabel}>
         <span className={styles.logo} role="img" aria-label="2HOT2HANDLE" />
         <span className={styles.est}>EST. 2026 / BCN [ES]</span>
@@ -95,23 +100,13 @@ export default function CapsuleHeader({
       {/* Desktop CART — shop only (teaser has no cart, does not inherit it). */}
       {!comingSoon && <CapsuleCartButton />}
 
-      {/* Mobile right slot: functional burger MENU (shop) vs. a decorative, inert
-          burger that matches the teaser frame (no menu designed for Coming Soon). */}
+      {/* Mobile right slot: the shop's functional burger (opens the cart) vs. the
+          shared MUSIC menu in its LIGHT theme for the Coming Soon teaser (same items
+          + links as the dark Music menu; Figma 291-776). The .mobileMenu wrapper hides
+          it on desktop (the teaser desktop has no burger). */}
       {comingSoon ? (
-        <div className={styles.mobileMenu} aria-hidden="true">
-          <span className={styles.burgerStatic}>
-            <svg
-              className={styles.burgerIcon}
-              viewBox="0 0 32 32"
-              width="32"
-              height="32"
-              fill="none"
-              focusable="false"
-            >
-              <line x1="6.5" y1="10.5" x2="27.5" y2="10.5" stroke="currentColor" strokeLinecap="round" />
-              <line x1="6.5" y1="20.5" x2="27.5" y2="20.5" stroke="currentColor" strokeLinecap="round" />
-            </svg>
-          </span>
+        <div className={styles.mobileMenu}>
+          <MobileMenu theme="light" />
         </div>
       ) : (
         <CapsuleMobileMenu />
