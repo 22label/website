@@ -124,10 +124,14 @@ export default function ReleasePreviewer() {
     };
   }, []);
 
+  // On the HOME route the bottom-right block is retired (Figma: the old
+  // release-previewer / COMING SOON + date block is removed from the homepage; the
+  // social dock takes this corner instead). It stays on the other Music routes. The
+  // effects above are inert here because the refs never attach when we render null.
+  if (isHome) return null;
+
   return (
     <section ref={rootRef} className={styles.release} aria-label="Upcoming release">
-      {isHome && <span className={styles.rightGradient} aria-hidden="true" />}
-
       <div ref={cardRef} className={styles.card}>
         <div className={styles.releaseTop}>
           <span className={styles.divider} aria-hidden="true" />

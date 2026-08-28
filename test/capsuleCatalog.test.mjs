@@ -1,5 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import {
   CAPSULE_CATALOG,
   ALL_PRODUCTS,
@@ -8,7 +11,14 @@ import {
   variantGallery,
   collectionHref,
   productHref,
+  categoryLabel,
+  productBreadcrumb,
+  CAPSULE_LANDING,
+  CAPSULE_COMING_SOON,
 } from "../src/data/capsuleCatalog.mjs";
+
+const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
+const assetExists = (webPath) => existsSync(join(PUBLIC, webPath));
 
 test("every product has a stable, unique, non-empty slug", () => {
   const slugs = allProductSlugs();
@@ -117,6 +127,99 @@ test("price stays in the catalogue for every product (SPP / CTA / cart use it)",
   assert.equal(getProductBySlug("22-tee").price, 119);
   assert.equal(getProductBySlug("signal-tee").price, 79);
   assert.equal(getProductBySlug("guided-tee").price, 89);
+});
+
+test("GUIDED TEE definitive variant is BLACK with a real front + back (default black)", () => {
+  const g = getProductBySlug("guided-tee");
+  assert.equal(g.defaultColorId, "black");
+  const black = g.colors.find((c) => c.id === "black");
+  assert.equal(black.front, "/assets/capsule/guided-black-front.jpg");
+  assert.equal(black.back, "/assets/capsule/guided-black-back.jpg");
+  assert.ok(assetExists(black.front), "guided-black-front.jpg must exist");
+  assert.ok(assetExists(black.back), "guided-black-back.jpg must exist");
+});
+
+test("COLLECTION-hub hover: each MENS tee's default colour has a real `back` render", () => {
+  // The hub ProductCard crossfades front → `color.back` on hover. Every MENS tee must
+  // therefore expose a real back render on its default colour (Figma: 289-698 for the
+  // 22 TEE, plus signal/guided). This is the hub source of truth — NOT the SPP.
+  const map = {
+    "22-tee": "/assets/capsule/22tee-back.jpg", // Figma 289-698
+    "signal-tee": "/assets/capsule/signal-black-back.jpg",
+    "guided-tee": "/assets/capsule/guided-black-back.jpg",
+  };
+  for (const [slug, back] of Object.entries(map)) {
+    const p = getProductBySlug(slug);
+    const color = p.colors.find((c) => c.id === (p.defaultColorId ?? p.colors[0].id));
+    assert.equal(color.back, back, `${slug} hub-hover back asset`);
+    assert.ok(assetExists(color.back), `${slug} back asset exists on disk`);
+    assert.ok((color.backAlt || "").length > 0, `${slug} back has alt text`);
+  }
+});
+
+test("WOMENS products expose NO back render → no hover is invented for them", () => {
+  for (const p of CAPSULE_CATALOG.womens.products) {
+    const color = p.colors.find((c) => c.id === (p.defaultColorId ?? p.colors[0].id));
+    assert.equal(color.back, undefined, `${p.slug} has no back (no hub hover)`);
+    assert.equal(variantGallery(color).length, 1, `${p.slug} has a single (front) image`);
+  }
+});
+
+test("responsive landing images: distinct desktop + mobile assets per audience", () => {
+  for (const side of ["mens", "womens"]) {
+    const s = CAPSULE_LANDING[side];
+    assert.match(s.image, new RegExp(`landing-${side}-desktop\\.jpg$`));
+    assert.match(s.imageMobile, new RegExp(`landing-${side}-mobile\\.jpg$`));
+    assert.notEqual(s.image, s.imageMobile, "desktop and mobile are distinct exports");
+    assert.ok(assetExists(s.image), `${side} desktop asset exists`);
+    assert.ok(assetExists(s.imageMobile), `${side} mobile asset exists`);
+  }
+});
+
+test("Coming Soon teaser assets are SEPARATE from the shop landing (no shared shop file)", () => {
+  // New teaser images (Figma 290-1288/1289) — a distinct set so /capsule is never
+  // changed by editing them.
+  assert.match(CAPSULE_COMING_SOON.mens, /coming-soon-mens\.jpg$/);
+  assert.match(CAPSULE_COMING_SOON.womens, /coming-soon-womens\.jpg$/);
+  assert.ok(assetExists(CAPSULE_COMING_SOON.mens), "coming-soon MENS asset exists");
+  assert.ok(assetExists(CAPSULE_COMING_SOON.womens), "coming-soon WOMENS asset exists");
+  // Not the same files the shop landing uses (so editing one can't affect /capsule).
+  const shopFiles = [
+    CAPSULE_LANDING.mens.image,
+    CAPSULE_LANDING.mens.imageMobile,
+    CAPSULE_LANDING.womens.image,
+    CAPSULE_LANDING.womens.imageMobile,
+  ];
+  assert.ok(!shopFiles.includes(CAPSULE_COMING_SOON.mens));
+  assert.ok(!shopFiles.includes(CAPSULE_COMING_SOON.womens));
+});
+
+test("categoryLabel maps each category id to its display label (TEE/HOODIE/CAP)", () => {
+  assert.equal(categoryLabel("tee"), "TEE");
+  assert.equal(categoryLabel("hoodie"), "HOODIE");
+  assert.equal(categoryLabel("cap"), "CAP");
+});
+
+test("productBreadcrumb is category-based, audience-preserving, refresh-safe", () => {
+  // Previous crumb entry is the product's CATEGORY, linking to that category's
+  // collection while keeping the audience — reconstructed purely from catalogue data.
+  const tee = productBreadcrumb(getProductBySlug("signal-tee"));
+  assert.equal(tee.categoryLabel, "TEE");
+  assert.equal(tee.href, "/capsule/mens"); // TEE MENS → MENS collection (TEE active)
+  assert.equal(tee.title, "SIGNAL TEE");
+
+  const womens = productBreadcrumb(getProductBySlug("womens-tee-1"));
+  assert.equal(womens.categoryLabel, "TEE");
+  assert.equal(womens.href, "/capsule/womens"); // TEE WOMENS → WOMENS collection
+  assert.equal(womens.title, "22 TEE");
+
+  // Every product yields a category label + its own collection href + non-link title.
+  for (const p of ALL_PRODUCTS) {
+    const c = productBreadcrumb(p);
+    assert.equal(c.categoryLabel, categoryLabel(p.category));
+    assert.equal(c.href, collectionHref(p.gender));
+    assert.equal(c.title, p.title);
+  }
 });
 
 test("22 TEE exposes distinct description + composition copy (accordion source)", () => {

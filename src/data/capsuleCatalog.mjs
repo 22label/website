@@ -53,6 +53,11 @@ export const MENS_TEES = [
         swatchBorder: true,
         front: `${BASE}/22tee-cream-front.jpg`,
         frontAlt: "22 Tee in cream — front, worn by a model",
+        // Collection-hub hover/back (Figma 289-698, "22T_back") — same portrait crop
+        // as the front so the ProductCard crossfade never shifts. This drives the HUB
+        // hover only; the single-product gallery uses the explicit `gallery` below.
+        back: `${BASE}/22tee-back.jpg`,
+        backAlt: "22 Tee in cream — back, with 22 print, worn by a model",
         // Real 4-image gallery from Figma (node 282-780).
         gallery: [
           `${BASE}/22tee-cream-1.jpg`,
@@ -105,14 +110,19 @@ export const MENS_TEES = [
     category: "tee",
     gender: "mens",
     sizes: ALL_SIZES,
-    defaultColorId: "white",
+    // Definitive SPP (Figma 289-854 / carousel-guided-tee-black) shows the BLACK
+    // variant with a real front + back (exported as GUIDEDT_front_B / GUIDEDT_back_B).
+    defaultColorId: "black",
     colors: [
       {
         id: "black",
         label: "Black",
         swatch: "#000000",
-        front: `${BASE}/guided-white-front.jpg`,
-        frontAlt: "Guided Tee — front, worn by a model",
+        front: `${BASE}/guided-black-front.jpg`,
+        frontAlt: "Guided Tee in black — front, worn by a model",
+        back: `${BASE}/guided-black-back.jpg`,
+        backAlt:
+          "Guided Tee in black — back, with GUIDED BY FREQUENCY / praying hands / 22 print",
       },
       {
         id: "white",
@@ -226,26 +236,68 @@ export function productHref(slug) {
   return `/capsule/product/${slug}`;
 }
 
+/** Display label for a product category (TEE / HOODIE / CAP) from the tab table. */
+export function categoryLabel(category) {
+  const tab = TEE_TABS.find((t) => t.id === category);
+  return tab ? tab.label : String(category).toUpperCase();
+}
+
 /**
- * Capsule LANDING data (Figma 285-2079 / 285-1883): the two big image links +
- * their view-cursor labels. Images live under /public/assets/capsule.
+ * Category-based breadcrumb model for a product (Figma 283-713 desktop / 285-2068
+ * mobile: "‹ TEE / <title>"). The "previous" control is the product's CATEGORY,
+ * linking back to that category's collection while preserving the AUDIENCE — a TEE
+ * MENS product returns to the MENS collection (TEE active), a TEE WOMENS product to
+ * the WOMENS collection. Reconstructed purely from catalogue data, so it is correct
+ * on a direct refresh (never relies on browser history). Category is currently
+ * implicit in the collection (TEE is the only/active category); when HOODIE/CAP ship
+ * the same shape applies and `href` is where a `?category=` would attach.
+ */
+export function productBreadcrumb(product) {
+  return {
+    categoryLabel: categoryLabel(product.category),
+    href: collectionHref(product.gender),
+    title: product.title,
+  };
+}
+
+/**
+ * Capsule LANDING data — the two big images + their view-cursor labels. Desktop and
+ * mobile use DISTINCT exports with different crops (not one image cropped by CSS):
+ *  - desktop MENS 289-1230 / WOMENS 289-1231 (854×788 frame, full-body framing)
+ *  - mobile  MENS 289-1228 / WOMENS 289-1229 (375×333 frame, tighter upper-body)
+ * The component swaps them with <picture>+media so only the matching asset loads
+ * (no desktop→mobile flash). Same mapping powers both /capsule and the teaser.
  */
 export const CAPSULE_LANDING = {
   mens: {
     href: "/capsule/mens",
-    image: `${BASE}/landing-mens.jpg`,
+    image: `${BASE}/landing-mens-desktop.jpg`,
+    imageMobile: `${BASE}/landing-mens-mobile.jpg`,
     alt: "Enter the MENS capsule collection",
     cursor: "[VIEW MENS]",
     label: "View the MENS collection",
   },
   womens: {
     href: "/capsule/womens",
-    image: `${BASE}/landing-womens.jpg`,
+    image: `${BASE}/landing-womens-desktop.jpg`,
+    imageMobile: `${BASE}/landing-womens-mobile.jpg`,
     alt: "Enter the WOMENS capsule collection",
     cursor: "[VIEW WOMENS]",
     label: "View the WOMENS collection",
   },
   marqueeText: "GUIDED BY FREQUENCY",
+};
+
+/**
+ * Coming Soon TEASER images (Figma 290-1288 MENS / 290-1289 WOMENS) — a SEPARATE
+ * asset set from the shop landing above, so /capsule keeps its own approved visuals
+ * and can never be changed by editing these. Each node is a single export used at
+ * BOTH breakpoints (same visual desktop + mobile); the crop differs only via the
+ * container aspect + object-fit. Only /capsule-coming-soon reads these.
+ */
+export const CAPSULE_COMING_SOON = {
+  mens: `${BASE}/coming-soon-mens.jpg`,
+  womens: `${BASE}/coming-soon-womens.jpg`,
 };
 
 /**

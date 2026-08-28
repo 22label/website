@@ -46,6 +46,17 @@ test("ENTER cancels the one-shot autoplay (fresh load landing on /capsule)", () 
   assert.equal(shouldSound(s), false);
 });
 
+test("Coming Soon (/capsule-coming-soon) shares the SAME suppression policy", () => {
+  // /capsule-coming-soon is in isCapsuleRoute (see capsuleComingSoon.test.mjs), so
+  // AudioProvider drives the identical gate: entering silences, a fresh direct load
+  // cancels autoplay, and leaving never auto-resumes.
+  assert.equal(shouldSound(suppress(playing())), false); // enter → silent
+  assert.equal(suppress(freshLoad()).autoplayOnce, false); // direct load → no autoplay
+  const left = unsuppress(suppress(playing()));
+  assert.equal(left.wantPlay, false); // leave → forced paused, no auto-resume
+  assert.equal(shouldSound(left), false);
+});
+
 test("after leaving, an explicit user play still resumes (control works)", () => {
   const left = unsuppress(suppress(playing()));
   const afterUserPlay = { ...left, wantPlay: true }; // togglePlayback()

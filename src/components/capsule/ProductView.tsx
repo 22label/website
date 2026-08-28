@@ -7,7 +7,7 @@ import {
   CAPSULE_CATALOG,
   formatPrice,
   variantGallery,
-  collectionHref,
+  productBreadcrumb,
 } from "@/data/capsule";
 import { useCapsuleCart } from "./CapsuleCartContext";
 import CapsuleHeader from "./CapsuleHeader";
@@ -53,9 +53,12 @@ export default function ProductView({ product }: { product: CapsuleProduct }) {
 
   const selected =
     product.colors.find((c) => c.id === selectedId) ?? product.colors[0];
+  // Single-product gallery is STATIC — no hover swap. The front/back hover reveal is
+  // a COLLECTION-hub behaviour only (ProductCard); the product-detail gallery just
+  // shows the ordered gallery images (with color-variant switching + carousel).
   const gallery = variantGallery(selected);
   const tabs = CAPSULE_CATALOG[product.gender].tabs;
-  const backHref = collectionHref(product.gender);
+  const crumb = productBreadcrumb(product);
 
   const handleAdd = () => {
     if (!selectedSize) {
@@ -75,18 +78,22 @@ export default function ProductView({ product }: { product: CapsuleProduct }) {
     });
   };
 
-  const breadcrumb = (label: string, cls: string) => (
+  // Category-based breadcrumb (Figma 266-618 desktop / 285-2068 mobile): the "‹ TEE"
+  // control is a real link back to the product's own collection (audience preserved,
+  // category active); the current product title is aria-current and not a link. The
+  // "/" separator is drawn by CSS between the two <li>s. Same structure both breakpoints.
+  const breadcrumb = (cls: string) => (
     <nav className={cls} aria-label="Breadcrumb">
       <ol className={styles.breadcrumbList}>
         <li className={styles.breadcrumbItem}>
-          <Link className={styles.breadcrumbLink} href={backHref}>
+          <Link className={styles.breadcrumbLink} href={crumb.href}>
             <ChevronLeft />
-            {label}
+            {crumb.categoryLabel}
           </Link>
         </li>
         <li className={styles.breadcrumbItem}>
           <span className={styles.breadcrumbCurrent} aria-current="page">
-            {product.title}
+            {crumb.title}
           </span>
         </li>
       </ol>
@@ -100,15 +107,22 @@ export default function ProductView({ product }: { product: CapsuleProduct }) {
       />
 
       <main className={styles.productMain}>
-        {/* Mobile-only breadcrumb (above the gallery): "TEE / <title>". */}
-        {breadcrumb("TEE", styles.crumbStandalone)}
+        {/* Mobile-only breadcrumb (above the gallery): "‹ TEE / <title>". */}
+        {breadcrumb(styles.crumbStandalone)}
 
         <ProductCarousel images={gallery} />
 
+        {/* Product information container split into explicit regions (Figma 289-704/
+            779/854). On desktop the container is a fixed-height flex column: the top
+            group + accordion region + purchase region. The accordion region is BOUNDED
+            (flex:1, its content expands/scrolls INSIDE it), so toggling DESCRIPTION /
+            COMPOSITION never moves the purchase region — sizing and the CTA keep a
+            fixed position with a structural 52px gap, and there is no layout shift. */}
         <section className={styles.productInfo} aria-label={product.title}>
+          {/* Regions 1–3: breadcrumb, title + price, colour selector. */}
           <div className={styles.productInfoTop}>
-            {/* Desktop-only breadcrumb (top of the info column): "HOME / <title>". */}
-            {breadcrumb("HOME", styles.crumbInInfo)}
+            {/* Desktop-only breadcrumb (top of the info column): "‹ TEE / <title>". */}
+            {breadcrumb(styles.crumbInInfo)}
 
             <div className={styles.productTitleRow}>
               <h1 className={styles.productHeading}>{product.title}</h1>
@@ -138,64 +152,85 @@ export default function ProductView({ product }: { product: CapsuleProduct }) {
                 );
               })}
             </div>
+          </div>
 
+          {/* Region 4: accordions. Bounded region — always mounted (so the purchase
+              region below keeps a fixed position even when a product has no copy).
+              Opening a panel expands within here (internal scroll if it ever exceeds),
+              never pushing sizing/CTA. Both start CLOSED; slug-based keys remount them
+              on product change so navigating always resets to closed. */}
+          <div className={styles.accordionRegion}>
             {(product.description?.length || product.composition?.length) && (
               <div className={styles.desc}>
                 {product.description && product.description.length > 0 && (
-                  <Accordion title="Description" items={product.description} defaultOpen />
+                  <Accordion
+                    key={`${product.slug}-description`}
+                    title="Description"
+                    items={product.description}
+                  />
                 )}
                 {product.composition && product.composition.length > 0 && (
-                  <Accordion title="Composition" items={product.composition} />
+                  <Accordion
+                    key={`${product.slug}-composition`}
+                    title="Composition"
+                    items={product.composition}
+                  />
                 )}
               </div>
             )}
           </div>
 
-          <div
-            className={styles.sizing}
-            role="group"
-            aria-label={`${product.title} size`}
-          >
-            {product.sizes.map((size, i) => {
-              const isSelected = size === selectedSize;
-              return (
-                <button
-                  key={size}
-                  ref={i === 0 ? firstSizeRef : undefined}
-                  type="button"
-                  className={styles.sizeBox}
-                  aria-pressed={isSelected}
-                  aria-label={`Size ${size}${isSelected ? " (selected)" : ""}`}
-                  onClick={() => {
-                    setSelectedSize((prev) => (prev === size ? null : size));
-                    setNeedsSize(false);
-                  }}
-                >
-                  <span className={styles.sizeBoxLabel}>{size}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className={styles.ctaRow}>
-            <button
-              type="button"
-              className={styles.preorder}
-              onClick={handleAdd}
-              aria-label={
-                selectedSize
-                  ? `Add ${product.title} (${selected.label}, size ${selectedSize}) to cart`
-                  : `Add ${product.title} to cart — select a size first`
-              }
+          {/* Region 5: fixed purchase region — sizing, 52px gap, CTA, validation.
+              Position-independent of the accordion state (Figma 52px size→CTA gap). */}
+          <div className={styles.purchaseRegion}>
+            <div
+              className={styles.sizing}
+              role="group"
+              aria-label={`${product.title} size`}
             >
-              PRE ORDER
-            </button>
-            <span className={styles.ctaPrice}>{formatPrice(product.price)}</span>
-          </div>
+              {product.sizes.map((size, i) => {
+                const isSelected = size === selectedSize;
+                return (
+                  <button
+                    key={size}
+                    ref={i === 0 ? firstSizeRef : undefined}
+                    type="button"
+                    className={styles.sizeBox}
+                    aria-pressed={isSelected}
+                    aria-label={`Size ${size}${isSelected ? " (selected)" : ""}`}
+                    onClick={() => {
+                      setSelectedSize((prev) => (prev === size ? null : size));
+                      setNeedsSize(false);
+                    }}
+                  >
+                    <span className={styles.sizeBoxLabel}>{size}</span>
+                  </button>
+                );
+              })}
+            </div>
 
-          <p className={styles.sizeHint} role="alert" data-show={needsSize ? "" : undefined}>
-            SELECT A SIZE
-          </p>
+            {/* CTA shows the action only — the price lives in the title row above
+                (Figma node 283-713). Price stays in the catalogue + cart. */}
+            <div className={styles.ctaRow}>
+              <button
+                type="button"
+                className={styles.preorder}
+                onClick={handleAdd}
+                aria-label={
+                  selectedSize
+                    ? `Add ${product.title} (${selected.label}, size ${selectedSize}) to cart`
+                    : `Add ${product.title} to cart — select a size first`
+                }
+              >
+                ADD TO CART
+              </button>
+            </div>
+
+            {/* Validation is absolutely positioned → it never shifts the CTA/sizing. */}
+            <p className={styles.sizeHint} role="alert" data-show={needsSize ? "" : undefined}>
+              SELECT A SIZE
+            </p>
+          </div>
         </section>
       </main>
     </div>

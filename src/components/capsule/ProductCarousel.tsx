@@ -19,6 +19,9 @@ import styles from "./capsule.module.css";
  * - Keyboard: the viewport is focusable and scrolls with the arrow keys natively.
  * Native scrolling also enforces the start/end limits for free. Respects
  * prefers-reduced-motion (movement is direct — no added animation to strip).
+ *
+ * The product-detail gallery is STATIC: images never swap on hover (front/back hover
+ * is a collection-hub behaviour only). No mouse listeners for image swapping.
  */
 export default function ProductCarousel({
   images,

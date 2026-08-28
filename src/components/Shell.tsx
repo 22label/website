@@ -5,6 +5,7 @@ import { isCapsuleRoute } from "@/effects/capsuleRoute";
 import Nav from "@/components/Nav";
 import MobileNav from "@/components/MobileNav";
 import ReleasePreviewer from "@/components/ReleasePreviewer";
+import HomeSocialDock from "@/components/HomeSocialDock";
 import DesktopRail from "@/components/DesktopRail";
 import MobileBottom from "@/components/MobileBottom";
 import EffectsDebugPanel from "@/components/EffectsDebugPanel";
@@ -75,8 +76,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           all routes; renders nothing on mobile) */}
       <DesktopRail />
 
-      {/* BOTTOM-RIGHT — release previewer (unchanged behaviour) */}
+      {/* BOTTOM-RIGHT — release previewer (retired on Home; kept on other routes) */}
       <ReleasePreviewer />
+
+      {/* BOTTOM-RIGHT (Home only) — the three social icons, moved out of the top-right
+          menu into this corner (desktop). Renders nothing off Home / on mobile. */}
+      <HomeSocialDock />
 
       {/* MOBILE — global bottom section (player + animated info, all routes) */}
       <MobileBottom />

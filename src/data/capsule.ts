@@ -49,6 +49,7 @@ export interface CapsuleCategoryTab {
 export interface CapsuleLandingSide {
   href: string;
   image: string;
+  imageMobile: string;
   alt: string;
   cursor: string;
   label: string;
@@ -83,7 +84,17 @@ export const collectionHref = catalog.collectionHref as (
   gender: CapsuleGender,
 ) => string;
 export const productHref = catalog.productHref as (slug: string) => string;
+export const categoryLabel = catalog.categoryLabel as (
+  category: CapsuleCategory,
+) => string;
+export const productBreadcrumb = catalog.productBreadcrumb as (
+  product: CapsuleProduct,
+) => { categoryLabel: string; href: string; title: string };
 export const CAPSULE_LANDING = catalog.CAPSULE_LANDING as CapsuleLanding;
+export const CAPSULE_COMING_SOON = catalog.CAPSULE_COMING_SOON as {
+  mens: string;
+  womens: string;
+};
 export const variantGallery = catalog.variantGallery as (
   color: ProductColor,
 ) => { src: string; alt: string }[];

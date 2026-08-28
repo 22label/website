@@ -6,7 +6,7 @@ import type { CapsuleProduct, CapsuleSize } from "@/data/capsule";
 import { formatPrice, productHref } from "@/data/capsule";
 import styles from "./capsule.module.css";
 
-/** The self-contained line item a card emits when its + ADD is pressed. */
+/** The self-contained line item a card emits when its ADD TO CART is pressed. */
 export interface AddToCartInput {
   productId: string;
   name: string;
@@ -28,14 +28,14 @@ export interface AddToCartInput {
  *
  * Sizes are real toggle buttons: click an unselected size to pick it, click the
  * selected size again to clear it (at most one selected per card). No default is
- * pre-selected, so + ADD is blocked until a size is chosen; only THEN (a failed
+ * pre-selected, so ADD TO CART is blocked until a size is chosen; only THEN (a failed
  * add) does the right-aligned "SELECT A SIZE" prompt appear. The prompt is
  * absolutely positioned so it can never shift the grid. Changing colour never
  * clears the size; each card owns its own state.
  *
  * PRESENTATION VARIANTS (a typed prop, not CSS/position hacks):
  *  - "summary" (Capsule Hub): image + a single centred title. Price, the colour /
- *    size / + ADD / SELECT A SIZE row are simply not rendered — no reserved space,
+ *    size / ADD TO CART / SELECT A SIZE row are simply not rendered — no reserved space,
  *    no validation. Purchasing (and the price) live on the single-product page.
  *  - "full" (default): title + price + every purchase control. The rows + their
  *    logic stay intact in this component and can be reused anywhere; nothing is
@@ -212,13 +212,13 @@ export default function ProductCard({
                   : `Add ${product.title} to cart — select a size first`
               }
             >
-              + ADD
+              ADD TO CART
             </button>
           </div>
         </div>
         )}
 
-        {/* Right-aligned prompt shown only after a size-less + ADD attempt (full
+        {/* Right-aligned prompt shown only after a size-less ADD TO CART attempt (full
             variant only). Absolutely positioned → reserves no flow space, so it
             can never shift the grid. visibility:hidden (default) keeps it out of
             the a11y tree until shown, when role="alert" announces it. */}

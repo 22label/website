@@ -1,0 +1,59 @@
+/* Bottom-right social dock (Home only). Anchored 64px from the right + bottom edges
+   (the corner the release previewer used), above the WebGL canvas so it stays
+   clickable. Desktop-only — mobile keeps its existing social in the header/menu. */
+.dock {
+  position: fixed;
+  bottom: var(--corner-gap); /* 64px */
+  right: var(--corner-gap); /* 64px */
+  z-index: var(--z-menu); /* above the canvas + player, same layer as the top menu */
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dock a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* ≥44px touch target around the ~16px icon without affecting the visual row. */
+  padding: 14px;
+  margin: -14px;
+  color: var(--white);
+  transition: color 0.2s ease;
+}
+
+.icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+/* SoundCloud waveform — reference box ~20×16. */
+.iconSoundcloud {
+  display: block;
+  width: 20px;
+  height: 16px;
+}
+
+.dock a:focus-visible {
+  outline: 2px solid var(--white);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .dock a:hover {
+    color: var(--muted);
+  }
+}
+
+/* Mobile keeps the existing social (header/menu) — no bottom-right dock. */
+@media (max-width: 767px) {
+  .dock {
+    display: none;
+  }
+}

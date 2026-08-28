@@ -102,11 +102,21 @@
   outline-offset: 3px;
 }
 
+/* Desktop CART trigger — anchored to the top-right corner of the page (64px from
+   the top + right edges, Figma 285-2109 / 271-639). Absolute + right-anchored so it
+   is OUT of the centre grid column and the marquee, stays pinned top-right at every
+   desktop width, never overlaps the images (they start at y188), and never shifts
+   when the count grows from one to more digits. Anchors to .page / .landingPage
+   (both position:fixed → the containing block == the viewport). */
 .cart {
-  justify-self: end;
+  position: absolute;
+  top: 64px;
+  right: 64px;
+  z-index: 20;
   font-size: 16px;
   letter-spacing: 1.76px;
   color: #000;
+  white-space: nowrap;
   transition: opacity var(--dur) var(--ease);
 }
 /* When the drawer is open, CLOSE takes this slot — hide the trigger (kept in the
@@ -686,7 +696,11 @@
 
 .productInfo {
   /* Fixed to the viewport so it is vertically centred against the FULL height
-     (not just the area below the header), matching Figma. */
+     (not just the area below the header), matching Figma. Fixed 570px height split
+     into three flex regions: the top group + the accordion region + the purchase
+     region. NO space-between — the accordion region (flex:1) absorbs the slack and
+     pins the purchase region to the bottom, so the purchase region's position is
+     independent of the accordion open/closed state. */
   position: fixed;
   left: 64px;
   top: 50%;
@@ -695,32 +709,59 @@
   height: 570px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   color: #000;
 }
+/* Region 1–3: breadcrumb, title+price, colour — natural height, pinned to the top. */
 .productInfoTop {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 32px;
+}
+/* Region 4: accordions. Bounded — takes the middle slack (flex:1). Its content
+   expands/scrolls INSIDE it, so opening a panel never pushes the purchase region.
+   The 32px offset from the colour selector matches the Figma accordion start (y151).
+   With the fixed heights this makes sizing land at y≈420 and the CTA at y514. */
+.accordionRegion {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-top: 32px;
+}
+/* Region 5: fixed purchase region — sizing, a structural 52px gap, then the CTA.
+   Pinned to the bottom by the flex:1 accordion region above; position:relative
+   anchors the absolutely-positioned SELECT A SIZE validation so it never shifts. */
+.purchaseRegion {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 52px; /* exact size-container → CTA gap (Figma 289-704/779/854) */
+  position: relative;
 }
 .productTitleRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   width: 100%;
 }
 .productHeading {
   margin: 0;
+  min-width: 0; /* title shrinks first; never overlaps the price */
   font-size: 16px;
   letter-spacing: 1.76px;
   font-weight: 600; /* Clash Display Semibold */
 }
-/* Price sits in the title row on MOBILE only (desktop shows it in the CTA row). */
+/* Price sits in the title row on BOTH breakpoints now (Figma 283-713): title
+   (Semibold) left, price (Regular) right, same 16px / 1.76px tracking, aligned via
+   the row's space-between. The price is text (not a heading) and never duplicated in
+   the CTA. Right-anchored in the row so different price widths cause no layout shift. */
 .productTitlePrice {
+  flex: 0 0 auto;
   font-size: 16px;
   letter-spacing: 1.76px;
   color: #000;
-  display: none;
+  white-space: nowrap;
 }
 
 /* Breadcrumb has two placements: inside the info column on desktop ("HOME"),
@@ -914,17 +955,13 @@
   outline-offset: 2px;
 }
 
-/* CTA row: PRE ORDER pill (reuses .preorder) + price, right-aligned. */
+/* CTA row: PRE ORDER pill only, left-aligned (Figma 269-699: the 167px pill sits at
+   x0). The price was removed from here — it now lives in the title row. */
 .ctaRow {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   width: 100%;
-}
-.ctaPrice {
-  font-size: 16px;
-  letter-spacing: 1.76px;
-  color: #000;
 }
 
 /* carousel viewport: real horizontal-scroll mask; clips the track at its left
@@ -1016,6 +1053,11 @@
   flex: 1;
   min-height: 0;
   display: flex; /* two halves side by side (desktop) */
+  /* Exact 64px gap between the bottom of the top-left block (logo + EST, ends at
+     y124 = 64px top pad + 60px block) and the top of the images (Figma: images start
+     at y188). Measured from the block boundary, not the viewport, and expressed
+     structurally so the distance is preserved across all desktop widths. */
+  margin-top: 64px;
 }
 .landingSide {
   flex: 1 1 50%;
@@ -1086,23 +1128,128 @@
   }
 }
 
-/* Header cart trigger: text on desktop, burger on mobile (same button + ref). */
-.cartText {
-  display: inline;
-}
-.cartBurger {
+/* ---------- mobile burger MENU (Figma 285-1899 header / 285-1912 icon) ----------
+   Hidden on desktop; shown on mobile where it replaces the CART text. A real button
+   with a padded ≥44px touch target (the ::before) around the exact 32×32 two-line
+   glyph, which stays flush-right at its designed size so the header keeps its height. */
+.mobileMenu {
   display: none;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  width: 24px;
-  height: 24px;
 }
-.cartBurger span {
+.burger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #000;
+  cursor: pointer;
+}
+/* Expand the tappable area to 44px without changing layout or header height. */
+.burger::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+}
+.burger:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 4px;
+}
+.burgerIcon {
   display: block;
-  height: 2px;
-  width: 100%;
-  background: #000;
+  width: 32px;
+  height: 32px;
+}
+
+/* Decorative, inert burger for the Coming Soon mobile header — visual parity with
+   the teaser frame, but NOT a button (no menu is designed for the teaser). */
+.burgerStatic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #000;
+  pointer-events: none;
+}
+
+/* Coming Soon teaser label OVERLAID on the marquee (Figma 289-1054). A STATIC span,
+   sibling of .marqueeTrack inside .marquee, centred on the marquee bar and stacked
+   above the moving track. It never joins the loop, never inherits the track's
+   transform, and never intercepts input. Desktop uses the follow cursor instead, so
+   this shows on mobile only (see the mobile block). Copy/size/tracking/colour match
+   the node (24px / 2.64px / #000, no background). */
+.marqueeOverlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 2; /* above the animated track within the .marquee stacking context */
+  align-items: center;
+  justify-content: center; /* horizontal + vertical centre on the marquee bar */
+  pointer-events: none;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 2.64px;
+  color: #000;
+  white-space: nowrap;
+}
+
+/* Mobile menu overlay (full-screen dialog). The full navigation is not designed yet
+   (flagged in the report) — it exposes only the real CART action. No layout shift:
+   fixed overlay, body scroll locked while open. */
+.mobileMenuPanel {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: #fffdfc;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+  padding: calc(16px + env(safe-area-inset-top)) 24px
+    calc(24px + env(safe-area-inset-bottom));
+}
+.mobileMenuClose {
+  align-self: flex-end;
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 1.76px;
+  color: #000;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.mobileMenuClose:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
+}
+.mobileMenuBody {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+  margin-top: 48px;
+}
+.mobileMenuItem {
+  font: inherit;
+  font-size: 20px;
+  letter-spacing: 2.2px;
+  color: #000;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease);
+}
+.mobileMenuItem:hover {
+  opacity: 0.6;
+}
+.mobileMenuItem:focus-visible {
+  outline: 2px solid #000;
+  outline-offset: 3px;
 }
 
 /* Mobile sticky bottom menu — hidden by default (desktop). */
@@ -1126,11 +1273,16 @@
    Below 860px the layout switches from the desktop reference to the mobile one.
    ============================================================ */
 @media (max-width: 860px) {
-  /* --- header: logo + burger, no center menu --- */
+  /* --- header: logo + burger menu, no centre menu (Figma 285-1899) ---
+     Structural 16px top + 16px bottom padding (NOT via child line-height/margin);
+     the safe-area inset is ADDED to the 16px top, never doubling it. Logo + burger
+     stay vertically centred (items-center). Height ≈ 16px top + 32px icon + 16px
+     bottom = 64px (matches the frame). */
   .topBar {
-    grid-template-columns: auto 1fr auto;
+    display: flex;
     align-items: center;
-    padding: max(20px, env(safe-area-inset-top)) 24px 0;
+    justify-content: space-between;
+    padding: calc(16px + env(safe-area-inset-top)) 24px 16px;
     gap: 16px;
   }
   .menu {
@@ -1143,19 +1295,28 @@
     width: 182px;
     height: 16px;
   }
-  .cartText {
+  /* Desktop CART text hidden on mobile; the burger menu takes over. */
+  .cart {
     display: none;
   }
-  .cartBurger {
-    display: flex;
+  .mobileMenu {
+    display: block;
   }
 
   /* --- landing: stacked images + marquee between --- */
   .landingMain {
     flex-direction: column;
+    /* The 64px block→image gap is a desktop rule; mobile stacks flush under the
+       compact header (mobile landing frame does not use that spacing). */
+    margin-top: 0;
   }
   .landingSide {
     flex: 1 1 50%;
+  }
+  /* Coming Soon: the static [COMING SOON] label is centred ON the marquee bar
+     (mobile only — desktop uses the follow cursor). */
+  .marqueeOverlay {
+    display: flex;
   }
 
   /* --- collections: single column + reserve space for the sticky menu --- */
@@ -1243,30 +1404,36 @@
     display: flex;
     flex-direction: column;
     gap: 24px;
-    padding: 16px 0 32px;
+    /* No top padding here — the breadcrumb container owns its own 16px top pad. */
+    padding: 0 0 32px;
   }
   .crumbInInfo {
     display: none;
   }
+  /* Mobile breadcrumb container (Figma 285-2068): structural 16px top + 16px bottom
+     padding, 24px sides. */
   .crumbStandalone {
     display: block;
-    padding: 0 24px;
+    padding: 16px 24px;
   }
   .productInfo {
     position: static;
     transform: none;
     width: 100%;
     height: auto;
-    justify-content: flex-start;
     gap: 32px;
     padding: 0 24px;
   }
-  .productTitlePrice {
-    display: inline;
+  /* Mobile stacks naturally (no fixed viewport height): the accordion region flows
+     with its content and the purchase region follows it. The 32px region gap is
+     provided by .productInfo, so the desktop-only accordion offset is dropped. */
+  .accordionRegion {
+    flex: 0 0 auto;
+    margin-top: 0;
+    overflow: visible;
   }
-  .ctaPrice {
-    display: none;
-  }
+  /* Price stays in the title row on mobile too (already visible by default). The CTA
+     is full-width with only the action. */
   .ctaRow {
     justify-content: stretch;
   }

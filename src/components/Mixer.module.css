@@ -24,9 +24,45 @@
   flex-direction: row;
   gap: 32px;
   pointer-events: none;
+  /* Visible resting state. Hidden until music really plays (see [data-hidden]). */
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
   transition:
     background 0.2s ease,
-    border-color 0.2s ease; /* subtle; never gates the audio/filter */
+    border-color 0.2s ease,
+    opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1); /* subtle; never gates the audio/filter */
+}
+
+/* Hidden state (playback stopped / paused / pending / suppressed): fade out + a tiny
+   lift, then remove from hit-testing + the a11y/tab tree. visibility (not display)
+   keeps the fixed box in place → the final visible position is pixel-identical and
+   there is never a layout shift. Exit is slightly quicker than the entrance. */
+.mixer[data-hidden] {
+  opacity: 0;
+  transform: translateY(-6px);
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 240ms;
+}
+
+/* Reduced motion: no translate; a minimal opacity fade (state always ends correct). */
+@media (prefers-reduced-motion: reduce) {
+  .mixer {
+    transform: none;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease,
+      opacity 120ms linear;
+  }
+  .mixer[data-hidden] {
+    transform: none;
+    transition: opacity 120ms linear, visibility 0s linear 120ms;
+  }
 }
 
 /* Active while MUSIC IS PLAYING → black-50% fill + 1px white outline, matching the

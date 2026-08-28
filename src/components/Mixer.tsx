@@ -352,6 +352,12 @@ export default function Mixer({
   return (
     <div
       className={`${styles.mixer} ${playing ? styles.active : ""}`}
+      // Visibility follows the REAL transport state (AudioProvider.playing mirrors the
+      // engine, never a mere wantPlay/click): the knobs fade + translate in only once
+      // sound is actually playing, and fade out to fully hidden on pause/stop. Hidden
+      // ⇒ visibility:hidden + pointer-events:none (see CSS), so they are neither
+      // clickable nor keyboard-reachable. Fixed-position, so no layout shift either way.
+      data-hidden={playing ? undefined : ""}
       aria-label="Audio filter mixer"
     >
       {/* Non-visible hint for assistive tech while the knobs are locked. */}

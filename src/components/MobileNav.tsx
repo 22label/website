@@ -4,18 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { setNavIntent } from "@/effects/navIntent";
+import { CAPSULE_MUSIC_LINK } from "@/effects/capsuleRoute";
 import KineticLogo from "@/components/KineticLogo";
 import styles from "./MobileNav.module.css";
 
 /**
  * Mobile header (logo -> Home + burger) and full-viewport menu overlay.
- * The logo replaces the HOME entry, so the menu lists RELEASES / ABOUT /
- * A DAY WITH only. Includes focus trap, Escape/route/close handling, body lock
- * and focus restore to the burger. Rendered on every route; CSS hides it on
- * desktop (>=768px).
+ * The logo replaces the HOME entry, so the menu lists RELEASES / CAPSULE /
+ * A DAY WITH / ABOUT. CAPSULE (Figma 204-7110) points to the PUBLIC teaser
+ * (/capsule-coming-soon) in the SAME tab — never the WIP shop hub at /capsule.
+ * Includes focus trap, Escape/route/close handling, body lock and focus restore to
+ * the burger. Rendered on every route; CSS hides it on desktop (>=768px).
  */
 const MENU_ITEMS = [
   { label: "RELEASES", href: "/releases" },
+  CAPSULE_MUSIC_LINK,
   { label: "A DAY WITH", href: "/a-day-with" },
   { label: "ABOUT", href: "/about" },
 ] as const;

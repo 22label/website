@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CAPSULE_MUSIC_LINK } from "@/effects/capsuleRoute";
 import { useNavClick } from "./PortalNav";
 import styles from "./Nav.module.css";
 
@@ -10,10 +11,14 @@ import styles from "./Nav.module.css";
  * Top-right navigation. Active route derived from usePathname(); the 22px line
  * indicator animates in front of the active item. Internal navigation uses
  * next/link (no full-page reload). Social links open in a new tab.
+ *
+ * CAPSULE (Figma 204-7110) sits after RELEASES and points to the PUBLIC teaser
+ * (/capsule-coming-soon) in the SAME tab — never the WIP shop hub at /capsule.
  */
 const NAV_ITEMS = [
   { label: "HOME", href: "/" },
   { label: "RELEASES", href: "/releases" },
+  CAPSULE_MUSIC_LINK,
   { label: "A DAY WITH", href: "/a-day-with" },
   { label: "ABOUT", href: "/about" },
 ] as const;
@@ -24,6 +29,9 @@ const SOUNDCLOUD_PATH =
 export default function Nav() {
   const pathname = usePathname();
   const onNavClick = useNavClick();
+  // On the HOME route the social icons move to the bottom-right dock (Figma 289-1096
+  // simplified menu / 289-1213 dock); other Music routes keep them here unchanged.
+  const isHome = pathname === "/";
 
   let activeIndex = NAV_ITEMS.findIndex((i) => i.href === pathname);
   if (activeIndex === -1) activeIndex = 0; // root fallback
@@ -90,6 +98,7 @@ export default function Nav() {
         })}
       </ul>
 
+      {!isHome && (
       <ul className={styles.social} aria-label="Social">
         <li>
           <a
@@ -171,6 +180,7 @@ export default function Nav() {
           </a>
         </li>
       </ul>
+      )}
     </nav>
   );
 }
