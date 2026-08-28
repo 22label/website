@@ -49,12 +49,18 @@ test("burger is a real button: dynamic name, aria-expanded, aria-controls", () =
   assert.match(menu, /MENU_ID\s*=\s*"mobile-menu"/);
 });
 
-test("overlay is a portaled modal dialog with its own close, Escape, focus trap, restore", () => {
-  assert.match(menu, /createPortal\(/);
-  assert.match(menu, /document\.body/);
+test("SINGLE persistent header: overlay is content-only (no 2nd logo/close bar), no portal", () => {
+  // The burger IS the close control (toggles burger↔X in place) — there is NO second
+  // logo or close button inside the overlay, and the overlay is NOT portaled elsewhere
+  // (it opens BEHIND the one persistent header). This is what eliminates the jump.
+  assert.ok(!/createPortal/.test(menu), "no portal — overlay stays in the header's context");
+  assert.ok(!/styles\.bar|styles\.closeBtn|styles\.logo\b/.test(menu), "no second logo/close bar");
+  assert.equal((menu.match(/styles\.iconBtn/g) || []).length, 1, "exactly one burger/X control");
+});
+
+test("modal dialog: Escape, focus trap, scroll lock, focus restore to the burger", () => {
   assert.match(menu, /role="dialog"/);
   assert.match(menu, /aria-modal="true"/);
-  assert.match(menu, /aria-label="Close menu"[\s\S]*onClick=\{close\}/); // close control
   assert.match(menu, /e\.key === "Escape"/); // Escape closes
   assert.match(menu, /document\.body\.style\.overflow = "hidden"/); // scroll lock on
   assert.match(menu, /document\.body\.style\.overflow = prevOverflow/); // restored on close
@@ -77,11 +83,24 @@ test("theme tokens: dark (rgba(42,50,58,.9)/white) vs light (rgba(241,241,241,.9
   assert.match(menuCss, /\.menuNav a\s*\{[^}]*color:\s*var\(--menu-fg\)/);
 });
 
-test("overlay covers everything (high z-index) and honours reduced motion", () => {
-  assert.match(menuCss, /\.overlay\s*\{[^}]*z-index:\s*1000/);
+test("overlay opens BEHIND the header (low z), burger sits ABOVE it; reduced motion", () => {
+  // Overlay z-index 1 < burger z-index 2, both inside the header's stacking context,
+  // so the logo + burger stay on top and never move while the overlay covers the page.
+  assert.match(menuCss, /\.overlay\s*\{[^}]*z-index:\s*1\b/);
+  assert.match(menuCss, /\.iconBtn\s*\{[^}]*z-index:\s*2\b/);
   assert.match(menuCss, /backdrop-filter:\s*blur\(5\.5px\)/);
   assert.match(menuCss, /prefers-reduced-motion: reduce[\s\S]*animation:\s*none/);
   assert.ok(!/transition:\s*all/.test(menuCss));
+});
+
+test("persistent logo is lifted above the overlay in BOTH headers (no jump on open)", () => {
+  const navCss = read("src/components/MobileNav.module.css");
+  const capCss = read("src/components/capsule/capsule.module.css");
+  assert.match(navCss, /\.logoLink\s*\{[^}]*z-index:\s*2/);
+  assert.match(capCss, /\.logoLink\s*\{[^}]*z-index:\s*2/);
+  // Coming Soon header is a stacking context above the landing so the overlay can sit
+  // behind the logo/burger yet above the images/marquee.
+  assert.match(capCss, /\.topBar\[data-variant="coming-soon"\]\s*\{[^}]*z-index:\s*40/);
 });
 
 test("socials are NOT duplicated — exactly three, once", () => {

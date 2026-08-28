@@ -67,7 +67,9 @@ export default function CapsuleLandingView({
           );
           return comingSoon ? (
             // Non-navigable image: NOT a link/button, not focusable, no onClick. The
-            // cursor zone only drives the informative [COMING SOON] label.
+            // cursor zone drives the desktop follow-cursor; on mobile a single static
+            // [COMING SOON] label is centred on the WOMENS photo (its own wrapper is
+            // the containing block).
             <div
               key={side.image}
               className={styles.landingSide}
@@ -75,6 +77,11 @@ export default function CapsuleLandingView({
               data-cursor-label="[COMING SOON]"
             >
               {picture}
+              {audience === "womens" && (
+                <span className={styles.comingSoonLabel} aria-hidden="true">
+                  [COMING SOON]
+                </span>
+              )}
             </div>
           ) : (
             <Link
@@ -91,14 +98,10 @@ export default function CapsuleLandingView({
           );
         })}
 
-        {/* Coming Soon: a STATIC [COMING SOON] label is overlaid on the marquee bar
-            (centred), rendered by CapsuleMarquee OUTSIDE its animated track so only
-            the repeated text moves. It shows on mobile (desktop uses the follow
-            cursor); the label never joins the loop and never inherits its transform. */}
-        <CapsuleMarquee
-          text={marqueeText}
-          overlayLabel={comingSoon ? "[COMING SOON]" : undefined}
-        />
+        {/* The marquee is a single animated track. On desktop it is centred across
+            both images; on mobile it sits over the MENS photo (see CSS). The static
+            [COMING SOON] is NOT part of it — it lives on the WOMENS photo above. */}
+        <CapsuleMarquee text={marqueeText} />
       </main>
 
       <HubCursor disabled={drawerOpen} />

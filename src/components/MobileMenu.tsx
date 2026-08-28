@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { setNavIntent } from "@/effects/navIntent";
 import { CAPSULE_MUSIC_LINK } from "@/effects/capsuleRoute";
 import styles from "./MobileMenu.module.css";
@@ -13,19 +12,22 @@ import styles from "./MobileMenu.module.css";
  * the public Capsule Coming Soon teaser (light) via a typed `theme`. ONE component and
  * ONE link list — the only difference between contexts is the colour scheme (dark
  * 204-8604 / light 291-776). Same items, order, destinations, same-tab links,
- * accessible names and keyboard behaviour in both.
+ * accessible names, geometry, motion and keyboard behaviour in both.
+ *
+ * SINGLE PERSISTENT HEADER: the burger lives in the caller's header and simply toggles
+ * burger↔X in place (same 32×32 box, same button). The overlay is the menu CONTENT
+ * only (items + socials) — it opens BEHIND the header, never re-renders a second
+ * logo/close bar, so the header + logo stay physically identical between closed and
+ * open (no jump). Stacking: the caller's header is a stacking context above the page;
+ * the logo + burger sit above the overlay, the overlay covers the page content.
  *
  * Items mirror the current Music menu (HOME is the logo, so it is not listed here);
  * CAPSULE points to the PUBLIC teaser (/capsule-coming-soon) — never the WIP shop — so
  * on the teaser page it is the current route and gets aria-current="page".
  *
- * The overlay is a SELF-CONTAINED modal PORTALED to <body> (its own logo + close, per
- * the frames), so it never gets trapped in either header's stacking context and renders
- * identically in both. Real <button> burger with a dynamic name (Open/Close menu),
- * aria-expanded + aria-controls; role=dialog + aria-modal with a focus trap, Escape to
- * close, body scroll lock, focus restored to the burger on close, and auto-close on
- * route change (covers Back). The parent decides the breakpoint at which the burger
- * shows (Music <=767; Capsule <=860).
+ * Accessibility: real <button> with a dynamic name (Open/Close menu), aria-expanded +
+ * aria-controls; role=dialog + aria-modal with a focus trap, Escape to close, body
+ * scroll lock, focus restored to the burger on close, and auto-close on route change.
  */
 const MENU_ITEMS = [
   { label: "RELEASES", href: "/releases" },
@@ -69,10 +71,14 @@ export default function MobileMenu({ theme = "dark" }: { theme?: "dark" | "light
         return;
       }
       if (e.key !== "Tab") return;
-      const focusables = overlayRef.current?.querySelectorAll<HTMLElement>(
-        'a[href], button, [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusables || focusables.length === 0) return;
+      // Trap Tab within the burger (the close control) + the overlay content.
+      const focusables = [
+        burger,
+        ...(overlayRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button, [tabindex]:not([tabindex="-1"])',
+        ) ?? []),
+      ].filter(Boolean) as HTMLElement[];
+      if (focusables.length === 0) return;
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
       if (e.shiftKey && document.activeElement === first) {
@@ -84,7 +90,7 @@ export default function MobileMenu({ theme = "dark" }: { theme?: "dark" | "light
       }
     };
     document.addEventListener("keydown", onKey);
-    overlayRef.current?.querySelector<HTMLElement>("a[href], button")?.focus();
+    overlayRef.current?.querySelector<HTMLElement>("a[href]")?.focus();
 
     return () => {
       document.body.style.overflow = prevOverflow;
@@ -95,6 +101,7 @@ export default function MobileMenu({ theme = "dark" }: { theme?: "dark" | "light
 
   return (
     <div className={styles.menu} data-theme={theme}>
+      {/* The ONE persistent control: burger ⇄ X in the same 32×32 box (same button). */}
       <button
         ref={burgerRef}
         type="button"
@@ -113,85 +120,64 @@ export default function MobileMenu({ theme = "dark" }: { theme?: "dark" | "light
         </svg>
       </button>
 
-      {open &&
-        createPortal(
-          <div
-            id={MENU_ID}
-            ref={overlayRef}
-            className={styles.overlay}
-            data-theme={theme}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu"
-          >
-            <div className={styles.bar}>
-              <Link
-                href="/"
-                className={styles.logoLink}
-                aria-label="2HOT2HANDLE — Home"
-                onClick={() => {
-                  setNavIntent("internal");
-                  close();
-                }}
-              >
-                <span className={styles.logo} role="img" aria-label="2HOT2HANDLE" />
-              </Link>
-              <button type="button" className={styles.closeBtn} aria-label="Close menu" onClick={close}>
-                <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
-                  <path d="M9 9 L23 23 M23 9 L9 23" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      {/* Menu CONTENT only — opens BEHIND the persistent header (no second logo/bar). */}
+      {open && (
+        <div
+          id={MENU_ID}
+          ref={overlayRef}
+          className={styles.overlay}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Menu"
+        >
+          <nav className={styles.menuNav} aria-label="Primary">
+            {MENU_ITEMS.map((item) => {
+              const active = item.href === pathname;
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={active ? styles.menuActive : undefined}
+                  onClick={() => {
+                    setNavIntent("internal");
+                    close();
+                  }}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <ul className={styles.social} aria-label="Social">
+            <li>
+              <a href="https://soundcloud.com/2h2h_music" target="_blank" rel="noopener noreferrer" aria-label="2H2H on SoundCloud">
+                <svg className={styles.scIcon} viewBox="0 -3.5 20 16" aria-hidden="true">
+                  <path d={SOUNDCLOUD_PATH} fill="currentColor" />
                 </svg>
-              </button>
-            </div>
-
-            <nav className={styles.menuNav} aria-label="Primary">
-              {MENU_ITEMS.map((item) => {
-                const active = item.href === pathname;
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={active ? styles.menuActive : undefined}
-                    onClick={() => {
-                      setNavIntent("internal");
-                      close();
-                    }}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-
-            <ul className={styles.social} aria-label="Social">
-              <li>
-                <a href="https://soundcloud.com/2h2h_music" target="_blank" rel="noopener noreferrer" aria-label="2H2H on SoundCloud">
-                  <svg className={styles.scIcon} viewBox="0 -3.5 20 16" aria-hidden="true">
-                    <path d={SOUNDCLOUD_PATH} fill="currentColor" />
-                  </svg>
-                </a>
-              </li>
-              <li>
-                <a href="https://www.instagram.com/2h2h_studio/" target="_blank" rel="noopener noreferrer" aria-label="2H2H on Instagram">
-                  <svg className={styles.icon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" strokeWidth="1.8" />
-                    <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
-                    <circle cx="17.5" cy="6.5" r="1.3" fill="currentColor" />
-                  </svg>
-                </a>
-              </li>
-              <li>
-                <a href="https://www.youtube.com/@2H2HMusic" target="_blank" rel="noopener noreferrer" aria-label="2H2H on YouTube">
-                  <svg className={styles.icon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <rect x="1.5" y="5" width="21" height="14" rx="4" stroke="currentColor" strokeWidth="1.8" />
-                    <path d="M10 8.75 L16 12 L10 15.25 Z" fill="currentColor" />
-                  </svg>
-                </a>
-              </li>
-            </ul>
-          </div>,
-          document.body,
-        )}
+              </a>
+            </li>
+            <li>
+              <a href="https://www.instagram.com/2h2h_studio/" target="_blank" rel="noopener noreferrer" aria-label="2H2H on Instagram">
+                <svg className={styles.icon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="2.5" y="2.5" width="19" height="19" rx="5" stroke="currentColor" strokeWidth="1.8" />
+                  <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
+                  <circle cx="17.5" cy="6.5" r="1.3" fill="currentColor" />
+                </svg>
+              </a>
+            </li>
+            <li>
+              <a href="https://www.youtube.com/@2H2HMusic" target="_blank" rel="noopener noreferrer" aria-label="2H2H on YouTube">
+                <svg className={styles.icon} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <rect x="1.5" y="5" width="21" height="14" rx="4" stroke="currentColor" strokeWidth="1.8" />
+                  <path d="M10 8.75 L16 12 L10 15.25 Z" fill="currentColor" />
+                </svg>
+              </a>
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,21 +6,10 @@ import styles from "./capsule.module.css";
  * identical track halves translated by -50% (no perceived jump); pointer-events
  * are off so it never blocks the image links beneath it. A single visually-hidden
  * copy carries the text for screen readers; under prefers-reduced-motion the CSS
- * stops the animation and the text stays statically legible.
- *
- * `overlayLabel` (Coming Soon teaser, Figma 289-1054): a STATIC label centred on the
- * marquee bar, rendered as a sibling OUTSIDE the animated `.marqueeTrack`. It is not
- * part of the loop (never duplicated), inherits none of the track's transform (never
- * vibrates/moves), and is pointer-events:none. CSS shows it on mobile only (desktop
- * uses the follow cursor); the underlying track keeps scrolling beneath it.
+ * stops the animation and the text stays statically legible. Position is CSS-only:
+ * desktop centres it across both images; mobile places it over the MENS photo.
  */
-export default function CapsuleMarquee({
-  text,
-  overlayLabel,
-}: {
-  text: string;
-  overlayLabel?: string;
-}) {
+export default function CapsuleMarquee({ text }: { text: string }) {
   const REPEATS = 4; // one half must exceed the widest viewport → no empty gap
   const half = Array.from({ length: REPEATS });
   return (
@@ -37,11 +26,6 @@ export default function CapsuleMarquee({
           </div>
         ))}
       </div>
-      {overlayLabel && (
-        <span className={styles.marqueeOverlay} aria-hidden="true">
-          {overlayLabel}
-        </span>
-      )}
     </div>
   );
 }

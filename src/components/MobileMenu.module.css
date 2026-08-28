@@ -1,20 +1,20 @@
 /* Shared mobile burger + menu overlay, themed dark (Music) / light (Coming Soon).
-   `.menu` is a passthrough — the PARENT decides at which breakpoint the burger shows
-   (Music <=767 via MobileNav .root; Capsule <=860 via .mobileMenu). Colours come from
-   theme tokens so the same rules render both schemes. */
+   `.menu` is a passthrough so the burger + overlay participate in the CALLER header's
+   stacking context: the header is a stacking context above the page, the logo + burger
+   sit above the overlay, and the overlay (menu content only) covers the page behind
+   them. The PARENT decides at which breakpoint the burger shows (Music <=767 via
+   MobileNav .root; Capsule <=860 via .mobileMenu). Colours come from theme tokens. */
 .menu {
   display: contents;
 }
 
-/* Theme tokens. Set on both the burger wrapper (.menu) and the portaled overlay. */
-.menu[data-theme="dark"],
-.overlay[data-theme="dark"] {
+/* Theme tokens (inherited by the burger + the nested overlay). */
+.menu[data-theme="dark"] {
   --menu-fg: var(--white);
   --menu-fg-muted: var(--muted);
   --menu-overlay-bg: rgba(42, 50, 58, 0.9); /* Figma 204:8604 */
 }
-.menu[data-theme="light"],
-.overlay[data-theme="light"] {
+.menu[data-theme="light"] {
   --menu-fg: #000;
   /* The light frame shows the current item (CAPSULE) in the same black as the rest;
      the current page is conveyed by aria-current="page", not a colour change. */
@@ -22,9 +22,12 @@
   --menu-overlay-bg: rgba(241, 241, 241, 0.9); /* Figma 291:917 */
 }
 
-/* Burger / close — visually 32px, comfortable 44px touch target. */
-.iconBtn,
-.closeBtn {
+/* Burger / X — visually 32px, comfortable 44px touch target. ONE button; the SVG
+   toggles burger↔X in place (same viewBox + box), so the control never moves. Sits
+   ABOVE the overlay so it stays visible + tappable while the menu is open. */
+.iconBtn {
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -37,25 +40,23 @@
   color: var(--menu-fg);
   cursor: pointer;
 }
-.iconBtn svg,
-.closeBtn svg {
+.iconBtn svg {
   width: 32px;
   height: 32px;
   display: block;
 }
-.iconBtn:focus-visible,
-.closeBtn:focus-visible {
+.iconBtn:focus-visible {
   outline: 2px solid var(--menu-fg);
   outline-offset: 2px;
   border-radius: 6px;
 }
 
-/* Full-viewport overlay (portaled to <body>) — self-contained: its own top bar
-   (logo + close), the nav items and the socials, over a single tint + blur. */
+/* Menu content overlay — opens BEHIND the header (z-index 1 < logo/burger z-index 2),
+   above the page content. Single tint + blur; NO second logo/close bar. */
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 1000; /* above the WebGL scene, headers, marquee + the COMING SOON label */
+  z-index: 1;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
@@ -69,36 +70,6 @@
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
   animation: overlayIn 0.3s ease both;
-}
-
-/* Top bar inside the overlay — logo left, close right (matches the fixed header pos). */
-.bar {
-  position: absolute;
-  top: calc(env(safe-area-inset-top) + 24px);
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-left: max(clamp(24px, 6.4vw, 28px), env(safe-area-inset-left));
-  padding-right: max(clamp(24px, 6.4vw, 28px), env(safe-area-inset-right));
-}
-.logoLink {
-  display: inline-flex;
-  -webkit-tap-highlight-color: transparent;
-}
-.logoLink:focus-visible {
-  outline: 2px solid var(--menu-fg);
-  outline-offset: 4px;
-}
-/* Recolour the shared logo to the theme foreground via a mask (asset untouched). */
-.logo {
-  display: block;
-  width: 182.782px;
-  height: 16px;
-  background-color: var(--menu-fg);
-  -webkit-mask: url("/assets/svg/logo.svg") no-repeat center / contain;
-  mask: url("/assets/svg/logo.svg") no-repeat center / contain;
 }
 
 .menuNav {
@@ -172,12 +143,11 @@
   }
 }
 
-/* Strip stray iOS Safari tap highlights on the links + burger/close (touch only), so
-   the desktop keyboard focus rings above are left untouched. */
+/* Strip stray iOS Safari tap highlights on the links + burger (touch only), so the
+   desktop keyboard focus rings above are left untouched. */
 @media (hover: none) and (pointer: coarse) {
   .menuNav a,
-  .iconBtn,
-  .closeBtn {
+  .iconBtn {
     -webkit-tap-highlight-color: transparent;
     -webkit-appearance: none;
     appearance: none;
@@ -194,11 +164,7 @@
   .iconBtn:focus,
   .iconBtn:focus-visible,
   .iconBtn:active,
-  .iconBtn:hover,
-  .closeBtn:focus,
-  .closeBtn:focus-visible,
-  .closeBtn:active,
-  .closeBtn:hover {
+  .iconBtn:hover {
     outline: none;
     box-shadow: none;
     border: 0;

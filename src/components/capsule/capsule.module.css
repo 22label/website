@@ -28,6 +28,8 @@
 }
 
 .logoLink {
+  position: relative;
+  z-index: 2; /* stays above the mobile menu overlay (z-index 1) in the same header */
   display: inline-flex;
   flex-direction: column;
   width: fit-content;
@@ -1164,25 +1166,25 @@
   height: 32px;
 }
 
-/* Coming Soon teaser label OVERLAID on the marquee (Figma 289-1054). A STATIC span,
-   sibling of .marqueeTrack inside .marquee, centred on the marquee bar and stacked
-   above the moving track. It never joins the loop, never inherits the track's
-   transform, and never intercepts input. Desktop uses the follow cursor instead, so
-   this shows on mobile only (see the mobile block). Copy/size/tracking/colour match
-   the node (24px / 2.64px / #000, no background). */
-.marqueeOverlay {
+/* Coming Soon teaser label — a single STATIC [COMING SOON] centred on the WOMENS
+   photo (Figma 294-867 / 289-1036). Its own .landingSide wrapper is the containing
+   block, so it centres on that photo (never the page/viewport). NOT part of the
+   marquee/track. Desktop uses the follow cursor instead → mobile only (see the mobile
+   block). Typography exact from the node: 32px / 3.52px / #BBB2AE (no opacity). */
+.comingSoonLabel {
   display: none;
   position: absolute;
-  inset: 0;
-  z-index: 2; /* above the animated track within the .marquee stacking context */
-  align-items: center;
-  justify-content: center; /* horizontal + vertical centre on the marquee bar */
-  pointer-events: none;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: 2.64px;
-  color: #000;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  font-size: 32px;
+  line-height: normal;
+  letter-spacing: 3.52px;
+  text-align: center;
   white-space: nowrap;
+  color: #bbb2ae;
+  pointer-events: none;
 }
 
 /* Mobile menu overlay (full-screen dialog). The full navigation is not designed yet
@@ -1279,6 +1281,10 @@
      env() is 0 on non-notch viewports → computed padding is exactly 24px on all sides. */
   .topBar[data-variant="coming-soon"] {
     padding: calc(24px + env(safe-area-inset-top)) 24px 24px;
+    /* Stacking context above the landing (images/marquee) so the burger's menu overlay
+       — nested here — covers the page while the logo + burger stay on top of it. */
+    position: relative;
+    z-index: 40;
   }
   .menu {
     display: none;
@@ -1308,10 +1314,19 @@
   .landingSide {
     flex: 1 1 50%;
   }
-  /* Coming Soon: the static [COMING SOON] label is centred ON the marquee bar
+  /* Mobile: the marquee moves UP so its bottom edge sits exactly 64px above the MENS
+     photo bottom. The two stacked images split .landingMain 50/50, so the MENS bottom
+     is the 50% line; bottom:calc(50% + 64px) is therefore 64px above it and scales
+     responsively with the photo (no fixed frame coordinates). Track motion unchanged. */
+  .marquee {
+    top: auto;
+    bottom: calc(50% + 64px);
+    transform: none;
+  }
+  /* Coming Soon: the single static [COMING SOON] label, centred on the WOMENS photo
      (mobile only — desktop uses the follow cursor). */
-  .marqueeOverlay {
-    display: flex;
+  .comingSoonLabel {
+    display: block;
   }
 
   /* --- collections: single column + reserve space for the sticky menu --- */

@@ -81,31 +81,33 @@ test("landing images use <picture> with a mobile <source> + explicit dimensions"
   assert.ok(!/figma\.com\/api\/mcp\/asset/.test(landingView), "no temporary MCP asset URLs");
 });
 
-// ---------- Coming Soon: [COMING SOON] label OVERLAID on the marquee (mobile) ----------
-test("the [COMING SOON] label is a STATIC overlay on the marquee, outside the animated track", () => {
-  // Passed as overlayLabel to CapsuleMarquee (only on the teaser), rendered as a
-  // sibling of the track — not inside it, not duplicated in the loop.
-  assert.match(landingView, /overlayLabel=\{comingSoon \? "\[COMING SOON\]" : undefined\}/);
-  assert.ok(!/comingSoonLabel/.test(landingView), "the old separate label is gone");
-  // Rendered AFTER the track, still inside .marquee; aria-hidden; single instance.
-  const trackIdx = marquee.indexOf("marqueeTrack");
-  const overlayIdx = marquee.indexOf("marqueeOverlay");
-  assert.ok(overlayIdx > trackIdx, "overlay is a sibling rendered after the track");
-  assert.match(marquee, /overlayLabel &&[\s\S]*marqueeOverlay[\s\S]*aria-hidden="true"/);
-  assert.equal((marquee.match(/\{overlayLabel\}/g) || []).length, 1, "label is not duplicated");
+// ---------- Coming Soon: single [COMING SOON] centred on the WOMENS photo (mobile) ----------
+test("exactly ONE [COMING SOON] label, on the WOMENS photo — NOT on the marquee/MENS", () => {
+  // Rendered inside the WOMENS .landingSide only (its wrapper is the containing block);
+  // NOT passed to the marquee, so it is not part of the animated track.
+  assert.match(landingView, /audience === "womens" &&[\s\S]*comingSoonLabel[\s\S]*\[COMING SOON\]/);
+  assert.ok(!/overlayLabel/.test(landingView), "no marquee overlay label remains");
+  assert.ok(!/overlayLabel|marqueeOverlay/.test(marquee), "the marquee carries no label");
+  // Exactly one label in the source render (the WOMENS side).
+  assert.equal((landingView.match(/styles\.comingSoonLabel/g) || []).length, 1);
 });
 
-test("marquee overlay is centred, above the track, non-interactive; mobile-only; exact type", () => {
-  // Centred on the marquee bar (absolute inset:0 + flex centre), above the track,
-  // pointer-events:none; NOT position:fixed (centred relative to .marquee).
-  assert.match(css, /\.marqueeOverlay\s*\{[^}]*position:\s*absolute[\s\S]*?inset:\s*0/);
-  assert.match(css, /\.marqueeOverlay\s*\{[^}]*align-items:\s*center[\s\S]*?justify-content:\s*center/);
-  assert.match(css, /\.marqueeOverlay\s*\{[^}]*pointer-events:\s*none/);
-  assert.ok(!/\.marqueeOverlay\s*\{[^}]*position:\s*fixed/.test(css));
-  // exact type (Figma 289-1054): 24px / 2.64px / #000; hidden on desktop, shown mobile.
-  assert.match(css, /\.marqueeOverlay\s*\{[^}]*font-size:\s*24px[\s\S]*?letter-spacing:\s*2\.64px/);
-  assert.match(css, /\.marqueeOverlay\s*\{[^}]*display:\s*none/); // desktop default
-  assert.match(css, /max-width: 860px[\s\S]*\.marqueeOverlay\s*\{\s*display:\s*flex/); // mobile shows it
+test("[COMING SOON] label: centred on its wrapper, static, non-interactive, mobile-only, exact type", () => {
+  // Centred on the WOMENS photo (its .landingSide is position:relative), NOT the page.
+  assert.match(css, /\.comingSoonLabel\s*\{[^}]*position:\s*absolute[\s\S]*?left:\s*50%[\s\S]*?top:\s*50%[\s\S]*?transform:\s*translate\(-50%, -50%\)/);
+  assert.match(css, /\.comingSoonLabel\s*\{[^}]*pointer-events:\s*none/);
+  assert.ok(!/\.comingSoonLabel\s*\{[^}]*position:\s*fixed/.test(css));
+  // exact type (Figma 294-867 / 289-1036): 32px / 3.52px / #BBB2AE — NOT via opacity.
+  assert.match(css, /\.comingSoonLabel\s*\{[^}]*font-size:\s*32px[\s\S]*?letter-spacing:\s*3\.52px[\s\S]*?color:\s*#bbb2ae/);
+  assert.ok(!/\.comingSoonLabel\s*\{[^}]*opacity/.test(css));
+  assert.match(css, /\.comingSoonLabel\s*\{[^}]*display:\s*none/); // desktop default (cursor instead)
+  assert.match(css, /max-width: 860px[\s\S]*\.comingSoonLabel\s*\{\s*display:\s*block/); // mobile shows it
+});
+
+test("mobile marquee sits 64px above the MENS photo bottom (responsive), track unchanged", () => {
+  assert.match(css, /max-width: 860px[\s\S]*\.marquee\s*\{[^}]*bottom:\s*calc\(50% \+ 64px\)/);
+  // no MotionTrack changes — only the marquee's vertical position moved.
+  assert.ok(!/\.marqueeOverlay/.test(css), "the old marquee-overlay label is removed");
 });
 
 // ---------- Coming Soon uses SEPARATE assets from the shop landing ----------

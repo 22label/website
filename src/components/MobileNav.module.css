@@ -25,6 +25,8 @@
 }
 
 .logoLink {
+  position: relative;
+  z-index: 2; /* stays above the menu overlay (z-index 1) inside this header */
   display: inline-flex;
   -webkit-tap-highlight-color: transparent; /* no blue tap flash on the logo */
 }

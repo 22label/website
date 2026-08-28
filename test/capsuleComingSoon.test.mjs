@@ -60,8 +60,8 @@ test("teaser has NO cart and opens the shared MENU (light); logo → the music h
 
 test("teaser keeps the marquee and shows a [COMING SOON] label (mobile) / cursor (desktop)", () => {
   assert.match(view, /CapsuleMarquee/);
-  // the label is now an overlay on the marquee (mobile), passed via overlayLabel
-  assert.match(view, /overlayLabel=\{comingSoon \? "\[COMING SOON\]" : undefined\}/);
+  // the single static label lives on the WOMENS photo (mobile); desktop uses the cursor.
+  assert.match(view, /audience === "womens" &&[\s\S]*comingSoonLabel/);
   assert.match(view, /\[COMING SOON\]/);
 });
 
