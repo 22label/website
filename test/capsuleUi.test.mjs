@@ -104,10 +104,34 @@ test("[COMING SOON] label: centred on its wrapper, static, non-interactive, mobi
   assert.match(css, /max-width: 860px[\s\S]*\.comingSoonLabel\s*\{\s*display:\s*block/); // mobile shows it
 });
 
-test("mobile marquee sits 64px above the MENS photo bottom (responsive), track unchanged", () => {
-  assert.match(css, /max-width: 860px[\s\S]*\.marquee\s*\{[^}]*bottom:\s*calc\(50% \+ 64px\)/);
-  // no MotionTrack changes — only the marquee's vertical position moved.
+test("mobile marquee sits 96px below the MENS photo top (responsive)", () => {
+  // Figma 296-813/296-814: marquee content 96px below the MENS photo's TOP edge.
+  assert.match(css, /max-width: 860px[\s\S]*\.marquee\s*\{[^}]*top:\s*96px/);
+  // no MotionTrack overlay label remains.
   assert.ok(!/\.marqueeOverlay/.test(css), "the old marquee-overlay label is removed");
+});
+
+test("marquee is ≥30% slower on mobile only; desktop duration unchanged", () => {
+  // Desktop base track keeps 32s.
+  assert.match(css, /\.marqueeTrack\s*\{[^}]*animation:\s*marqueeScroll\s+32s\s+linear\s+infinite/);
+  // Mobile overrides ONLY the duration to 44s (37.5% slower ≥ 30% minimum).
+  assert.match(css, /max-width: 860px[\s\S]*\.marqueeTrack\s*\{[^}]*animation-duration:\s*44s/);
+});
+
+test("MENS foreground cutout: mobile-only, layered ABOVE the marquee, inert", () => {
+  // Desktop hides it; the mobile block reveals it.
+  assert.match(css, /\.mensForeground\s*\{[^}]*display:\s*none/);
+  assert.match(css, /max-width: 860px[\s\S]*\.mensForeground\s*\{\s*display:\s*block/);
+  // z-index above the marquee (z5) so the marquee passes behind the body.
+  assert.match(css, /\.mensForeground\s*\{[^}]*z-index:\s*7/);
+  assert.match(css, /\.marquee\s*\{[^}]*z-index:\s*5/);
+  // sized identically to the base image (object-fit:cover) and non-interactive.
+  assert.match(css, /\.mensForeground\s*\{[^}]*object-fit:\s*cover/);
+  assert.match(css, /\.mensForeground\s*\{[^}]*pointer-events:\s*none/);
+  // rendered only for the MENS coming-soon side, from the registered cutout asset.
+  assert.match(landingView, /mensLayered\s*=\s*comingSoon\s*&&\s*audience\s*===\s*"mens"/);
+  assert.match(landingView, /CAPSULE_COMING_SOON\.mensMobileCutout/);
+  assert.match(landingView, /CAPSULE_COMING_SOON\.mensMobileBase/);
 });
 
 // ---------- Coming Soon uses SEPARATE assets from the shop landing ----------

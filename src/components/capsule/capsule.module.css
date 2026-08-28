@@ -1080,6 +1080,26 @@
   -webkit-user-drag: none;
 }
 
+/* MOBILE-ONLY foreground cutout for the Coming Soon MENS hero (Figma 296-820).
+   Hidden on desktop; the mobile block reveals it. Sizing is IDENTICAL to .landingImg
+   (inset:0 + object-fit:cover + center) and it shares the same square, pixel-
+   registered source as the mobile MENS base, so both crop the same → perfect
+   alignment. z-index sits ABOVE the marquee (.marquee z5) so the marquee passes
+   behind the body; pointer-events:none keeps the (non-interactive) teaser inert. */
+.mensForeground {
+  display: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 7;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
 /* Local landing marquee (Figma 286-702) — seamless, decorative, non-interactive. */
 .srOnly {
   position: absolute;
@@ -1314,14 +1334,25 @@
   .landingSide {
     flex: 1 1 50%;
   }
-  /* Mobile: the marquee moves UP so its bottom edge sits exactly 64px above the MENS
-     photo bottom. The two stacked images split .landingMain 50/50, so the MENS bottom
-     is the 50% line; bottom:calc(50% + 64px) is therefore 64px above it and scales
-     responsively with the photo (no fixed frame coordinates). Track motion unchanged. */
+  /* Mobile: the marquee content sits exactly 96px below the TOP edge of the MENS
+     photo (Figma 296-813/296-814). The MENS photo is the first stacked half and
+     starts at .landingMain's top (margin-top:0 on mobile), and .marquee's containing
+     block is .landingMain, so top:96px == 96px below the MENS photo top. Track motion
+     is unchanged apart from the mobile-only slow-down below. */
   .marquee {
-    top: auto;
-    bottom: calc(50% + 64px);
+    top: 96px;
+    bottom: auto;
     transform: none;
+  }
+  /* Mobile-only: slow the marquee ≥30% (desktop stays 32s). 32s → 44s is 37.5%
+     slower; only the duration is overridden, so the loop stays smooth, linear,
+     continuous and infinite (name/timing/iteration untouched). */
+  .marqueeTrack {
+    animation-duration: 44s;
+  }
+  /* Reveal the MENS foreground cutout so the marquee passes behind the body. */
+  .mensForeground {
+    display: block;
   }
   /* Coming Soon: the single static [COMING SOON] label, centred on the WOMENS photo
      (mobile only — desktop uses the follow cursor). */

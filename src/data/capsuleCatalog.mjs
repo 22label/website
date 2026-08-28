@@ -298,6 +298,16 @@ export const CAPSULE_LANDING = {
 export const CAPSULE_COMING_SOON = {
   mens: `${BASE}/coming-soon-mens.jpg`,
   womens: `${BASE}/coming-soon-womens.jpg`,
+  /**
+   * MOBILE-ONLY layered MENS hero (Figma 296-813): a registered pair exported from
+   * the same 2000×2000 master so they crop identically under object-fit:cover.
+   *  - mensMobileBase: the opaque photo, used as the mobile MENS base at ≤860px.
+   *  - mensMobileCutout: the transparent PNG of the SAME model at the SAME position,
+   *    layered ABOVE the marquee so the marquee passes behind the body.
+   * Desktop keeps `mens` (coming-soon-mens.jpg) untouched.
+   */
+  mensMobileBase: `${BASE}/coming-soon-mens-mobile.jpg`,
+  mensMobileCutout: `${BASE}/coming-soon-mens-cutout.png`,
 };
 
 /**

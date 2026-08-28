@@ -40,20 +40,28 @@ export default function CapsuleLandingView({
       <main className={styles.landingMain}>
         {sides.map((side, i) => {
           const audience = i === 0 ? "mens" : "womens";
+          const mensLayered = comingSoon && audience === "mens";
           // Coming Soon uses its OWN single asset (Figma 290-1288/1289) at both
           // breakpoints — a separate set from the shop, which keeps its distinct
           // desktop/mobile crops. <picture>+media downloads only the matching source
           // (no desktop→mobile flash); explicit dimensions reserve the box (no CLS);
           // object-fit:cover applies the per-breakpoint crop from the container.
+          // MOBILE-ONLY exception: the MENS teaser swaps in a SQUARE base (Figma
+          // 296-813) that is pixel-registered with the transparent cutout below, so
+          // the two crop identically under object-fit:cover. Desktop keeps `mens`.
           const desktopSrc = comingSoon ? CAPSULE_COMING_SOON[audience] : side.image;
-          const mobileSrc = comingSoon ? CAPSULE_COMING_SOON[audience] : side.imageMobile;
+          const mobileSrc = mensLayered
+            ? CAPSULE_COMING_SOON.mensMobileBase
+            : comingSoon
+              ? CAPSULE_COMING_SOON[audience]
+              : side.imageMobile;
           const picture = (
             <picture>
               <source
                 media="(max-width: 860px)"
                 srcSet={mobileSrc}
-                width={comingSoon ? 854 : 375}
-                height={comingSoon ? 788 : 333}
+                width={mensLayered ? 1200 : comingSoon ? 854 : 375}
+                height={mensLayered ? 1200 : comingSoon ? 788 : 333}
               />
               <img
                 className={styles.landingImg}
@@ -77,6 +85,22 @@ export default function CapsuleLandingView({
               data-cursor-label="[COMING SOON]"
             >
               {picture}
+              {/* Transparent PNG cutout of the SAME model (Figma 296-820), layered
+                  ABOVE the marquee so it appears to pass behind the body. MOBILE ONLY
+                  (CSS hides it ≤860px→shown; desktop keeps the flat single image).
+                  Pixel-registered with the square mobile base → object-fit:cover crops
+                  both identically, so it aligns with no shift/scale mismatch. */}
+              {mensLayered && (
+                <img
+                  className={styles.mensForeground}
+                  src={CAPSULE_COMING_SOON.mensMobileCutout}
+                  alt=""
+                  aria-hidden="true"
+                  width={1200}
+                  height={1200}
+                  draggable={false}
+                />
+              )}
               {audience === "womens" && (
                 <span className={styles.comingSoonLabel} aria-hidden="true">
                   [COMING SOON]
