@@ -299,6 +299,13 @@ export const CAPSULE_COMING_SOON = {
   mens: `${BASE}/coming-soon-mens.jpg`,
   womens: `${BASE}/coming-soon-womens.jpg`,
   /**
+   * WOMENS teaser has a DISTINCT asset per viewport (Figma desktop 301-829 / mobile
+   * 301-830), each pre-cropped to its own aspect (854×788 desktop, 375×333 mobile).
+   * The <picture> media query serves the right file per breakpoint — desktop must
+   * never fall back to the mobile crop or vice versa.
+   */
+  womensMobile: `${BASE}/coming-soon-womens-mobile.jpg`,
+  /**
    * MOBILE-ONLY layered MENS hero (Figma 296-813): a registered pair exported from
    * the same 2000×2000 master so they crop identically under object-fit:cover.
    *  - mensMobileBase: the opaque photo, used as the mobile MENS base at ≤860px.

@@ -49,19 +49,25 @@ export default function CapsuleLandingView({
           // MOBILE-ONLY exception: the MENS teaser swaps in a SQUARE base (Figma
           // 296-813) that is pixel-registered with the transparent cutout below, so
           // the two crop identically under object-fit:cover. Desktop keeps `mens`.
+          // WOMENS teaser: desktop (854×788) and mobile (375×333) are DISTINCT Figma
+          // exports (301-829 / 301-830), never interchangeable — the <picture> media
+          // serves each only at its own breakpoint.
+          const womensComingSoon = comingSoon && audience === "womens";
           const desktopSrc = comingSoon ? CAPSULE_COMING_SOON[audience] : side.image;
           const mobileSrc = mensLayered
             ? CAPSULE_COMING_SOON.mensMobileBase
-            : comingSoon
-              ? CAPSULE_COMING_SOON[audience]
-              : side.imageMobile;
+            : womensComingSoon
+              ? CAPSULE_COMING_SOON.womensMobile
+              : comingSoon
+                ? CAPSULE_COMING_SOON[audience]
+                : side.imageMobile;
           const picture = (
             <picture>
               <source
                 media="(max-width: 860px)"
                 srcSet={mobileSrc}
-                width={mensLayered ? 1200 : comingSoon ? 854 : 375}
-                height={mensLayered ? 1200 : comingSoon ? 788 : 333}
+                width={mensLayered ? 1200 : womensComingSoon ? 375 : comingSoon ? 854 : 375}
+                height={mensLayered ? 1200 : womensComingSoon ? 333 : comingSoon ? 788 : 333}
               />
               <img
                 className={styles.landingImg}

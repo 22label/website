@@ -104,9 +104,14 @@ test("[COMING SOON] label: centred on its wrapper, static, non-interactive, mobi
   assert.match(css, /max-width: 860px[\s\S]*\.comingSoonLabel\s*\{\s*display:\s*block/); // mobile shows it
 });
 
-test("mobile marquee sits 96px below the MENS photo top (responsive)", () => {
-  // Figma 296-813/296-814: marquee content 96px below the MENS photo's TOP edge.
-  assert.match(css, /max-width: 860px[\s\S]*\.marquee\s*\{[^}]*top:\s*96px/);
+test("mobile marquee is vertically centred inside the MENS photo (responsive)", () => {
+  // Figma 296-813/296-814: the marquee is centred in the MENS photo (its centre ==
+  // the frame centre). The MENS photo is the top stacked half (flex 1 1 50%) inside
+  // .landingMain, so top:25% + translateY(-50%) lands the marquee box on that centre.
+  assert.match(
+    css,
+    /max-width: 860px[\s\S]*\.marquee\s*\{[^}]*top:\s*25%[\s\S]*?transform:\s*translateY\(-50%\)/,
+  );
   // no MotionTrack overlay label remains.
   assert.ok(!/\.marqueeOverlay/.test(css), "the old marquee-overlay label is removed");
 });

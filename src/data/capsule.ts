@@ -94,6 +94,7 @@ export const CAPSULE_LANDING = catalog.CAPSULE_LANDING as CapsuleLanding;
 export const CAPSULE_COMING_SOON = catalog.CAPSULE_COMING_SOON as {
   mens: string;
   womens: string;
+  womensMobile: string;
   mensMobileBase: string;
   mensMobileCutout: string;
 };
