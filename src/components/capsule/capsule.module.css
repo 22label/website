@@ -1334,15 +1334,18 @@
   .landingSide {
     flex: 1 1 50%;
   }
-  /* Mobile: the marquee content sits exactly 96px below the TOP edge of the MENS
-     photo (Figma 296-813/296-814). The MENS photo is the first stacked half and
-     starts at .landingMain's top (margin-top:0 on mobile), and .marquee's containing
-     block is .landingMain, so top:96px == 96px below the MENS photo top. Track motion
-     is unchanged apart from the mobile-only slow-down below. */
+  /* Mobile: the marquee is VERTICALLY CENTRED inside the MENS photo (Figma
+     296-813/296-814: the 83px marquee sits at y117 in the 317px mens frame, so its
+     centre y158.5 == the frame centre 317/2). The MENS photo is the first stacked
+     half (flex 1 1 50%) starting at .landingMain's top (margin-top:0 on mobile), and
+     .marquee's containing block is .landingMain — so 25% == the centre of the MENS
+     photo at every width. top:25% + translateY(-50%) centres the marquee box there
+     regardless of its own height. Only the vertical position changes; horizontal
+     movement, size and the mobile-only slow-down below are unchanged. */
   .marquee {
-    top: 96px;
+    top: 25%;
     bottom: auto;
-    transform: none;
+    transform: translateY(-50%);
   }
   /* Mobile-only: slow the marquee ≥30% (desktop stays 32s). 32s → 44s is 37.5%
      slower; only the duration is overridden, so the loop stays smooth, linear,
