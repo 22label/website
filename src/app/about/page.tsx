@@ -3,19 +3,23 @@ import PortalMain from "@/components/PortalMain";
 import KineticTitle from "@/components/KineticTitle";
 import styles from "./about.module.css";
 
-// Exact copy + paragraph structure from Figma (node 204:7158 / 204:8707).
-// Rendered by AboutText with `white-space: pre-wrap`, so single "\n" are the
-// editorial line breaks (the "No trends"/"No nostalgia" split and the final two
-// lines) and blank lines separate paragraphs; everything else wraps naturally.
-const ABOUT_TEXT = `Some energies never die — they distort, collapse, and regenerate. After silence and dust, something awakens again.
+// Final About copy. Rendered by AboutText with `white-space: pre-wrap`, so single
+// "\n" are editorial line breaks (the "driven by…"/"Through sound…" split and the
+// "Nothing made to follow."/"Nothing made to fit in." split) and blank lines
+// separate paragraphs; everything else wraps naturally.
+const ABOUT_TEXT = `Some energies never die — they move, transform, and find their way back in new forms.
 
-No trends. No filters.
-No nostalgia — only the now.
+No trends. No filters. No nostalgia — only the now.
 
-The energy reincarnates and it is 2HOT2HANDLE — the new chapter born from the ashes of B.SOUL Music. Still uncompromising, but sharper, bolder, and burning hotter. Raw house. Heavy groove. No compromise.
+2HOT2HANDLE is driven by something you can’t always see, but you can feel.
+Through sound, movement and form, the same frequency takes different shapes.
 
-The heat never left,
-it just changed shape.`;
+Raw house. Heavy groove. Limited capsules.
+
+Nothing made to follow.
+Nothing made to fit in.
+
+Guided by frequency.`;
 
 export default function AboutPage() {
   return (
