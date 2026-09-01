@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { CARD, EFFECTS } from "@/effects/effectsConfig";
+import { hasSocialDock } from "./socialDockRoutes";
 import styles from "./ReleasePreviewer.module.css";
 
 /**
@@ -30,7 +31,10 @@ const DETAILS = [
 ] as const;
 
 export default function ReleasePreviewer() {
-  const isHome = usePathname() === "/";
+  // Retired on every desktop social-dock route (Home / RELEASES / A DAY WITH / ABOUT):
+  // the bottom-right corner is taken by the social dock instead of this "Coming Soon"
+  // release block. Kept for any other Music route.
+  const inDockRoute = hasSocialDock(usePathname());
 
   const rootRef = useRef<HTMLElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -124,11 +128,11 @@ export default function ReleasePreviewer() {
     };
   }, []);
 
-  // On the HOME route the bottom-right block is retired (Figma: the old
-  // release-previewer / COMING SOON + date block is removed from the homepage; the
-  // social dock takes this corner instead). It stays on the other Music routes. The
-  // effects above are inert here because the refs never attach when we render null.
-  if (isHome) return null;
+  // The bottom-right block is retired on the social-dock routes (Figma: the old
+  // release-previewer / COMING SOON + date block is removed; the social dock takes
+  // this corner instead). The effects above are inert here because the refs never
+  // attach when we render null.
+  if (inDockRoute) return null;
 
   return (
     <section ref={rootRef} className={styles.release} aria-label="Upcoming release">

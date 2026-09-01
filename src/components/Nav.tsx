@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CAPSULE_MUSIC_LINK } from "@/effects/capsuleRoute";
+import { hasSocialDock } from "./socialDockRoutes";
 import { useNavClick } from "./PortalNav";
 import styles from "./Nav.module.css";
 
@@ -29,9 +30,10 @@ const SOUNDCLOUD_PATH =
 export default function Nav() {
   const pathname = usePathname();
   const onNavClick = useNavClick();
-  // On the HOME route the social icons move to the bottom-right dock (Figma 289-1096
-  // simplified menu / 289-1213 dock); other Music routes keep them here unchanged.
-  const isHome = pathname === "/";
+  // On the social-dock routes (Home / RELEASES / A DAY WITH / ABOUT) the social icons
+  // move to the bottom-right dock (Figma 289-1096 simplified menu / 289-1213 dock), so
+  // the top-right menu drops its social row; any other route keeps them here unchanged.
+  const socialInDock = hasSocialDock(pathname);
 
   let activeIndex = NAV_ITEMS.findIndex((i) => i.href === pathname);
   if (activeIndex === -1) activeIndex = 0; // root fallback
@@ -98,7 +100,7 @@ export default function Nav() {
         })}
       </ul>
 
-      {!isHome && (
+      {!socialInDock && (
       <ul className={styles.social} aria-label="Social">
         <li>
           <a
